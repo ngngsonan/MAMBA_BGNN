@@ -630,7 +630,7 @@ def main(dataset):
         'early_stop_patience': 10,
         'grad_norm': False,
         'max_grad_norm': 5.0,
-        'log_dir': f'./{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
+        'log_dir': f'{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
         'model_name': f'{dataset}_v3',
         'log_step': 20,
     }
