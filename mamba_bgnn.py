@@ -1,4 +1,5 @@
 # @title MAMBA_BGNN
+# %%writefile /content/MAMBA_BGNN/mamba_bgnn.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import math
@@ -34,7 +35,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from einops import rearrange, einsum, repeat
-from result_plot import plot_analytics
 
 # ---------------------------- Model Arguments ----------------------------
 @dataclass
@@ -139,8 +139,6 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
         return x + self.mixer(self.norm(x))
-
-
 # --------------------------- BI-Mamba Stack -------------------------
 class BIMambaBlock(nn.Module):
     def __init__(self, args: ModelArgs, R: int = 3, dropout: float = 0.1):
@@ -149,16 +147,28 @@ class BIMambaBlock(nn.Module):
         self.f_mamba = nn.ModuleList([MambaBlock(args) for _ in range(R)])
         self.b_mamba = nn.ModuleList([MambaBlock(args) for _ in range(R)])
         self.norm1 = nn.ModuleList([nn.LayerNorm(args.d_model) for _ in range(R)])
-        self.ffn = nn.ModuleList([FeedForward(args, dropout) for _ in range(R)])
+        self.ffn   = nn.ModuleList([FeedForward(args, dropout) for _ in range(R)])
         self.norm2 = nn.ModuleList([nn.LayerNorm(args.d_model) for _ in range(R)])
 
     def forward(self, x):
+        # x: (B, L, N=d_model)
         for i in range(self.R):
-            y_fwd = self.f_mamba[i](x)
-            y_bwd = torch.flip(self.b_mamba[i](torch.flip(x, dims=[1])), dims=[1])
-            y = self.norm1[i](x + y_fwd + y_bwd)
-            z = self.ffn[i](y)
-            x = self.norm2[i](y + z)
+            # (8) Y1 = Mamba(X)
+            Y1 = self.f_mamba[i](x)
+
+            # (8) Y2 = Mamba(P X); P là phép đảo thời gian theo trục L
+            x_rev = torch.flip(x, dims=[1]).contiguous()
+            Y2_rev = self.b_mamba[i](x_rev)           # Y2 trên chuỗi đảo
+            Y2 = torch.flip(Y2_rev, dims=[1]).contiguous()  # P Y2 để về đúng thứ tự thời gian
+
+            # (9) Y3 = Norm(X + Y1 + P Y2)
+            Y3 = self.norm1[i](x + Y1 + Y2)
+
+            # (10) Y' = Projection_L(ReLU(Projection_U(Y3)))
+            Yp = self.ffn[i](Y3)
+
+            # (11) Y = Norm(Y' + Y3)
+            x = self.norm2[i](Yp + Y3)
         return x
 
 # MAGAC
@@ -219,41 +229,38 @@ class MAGAC(nn.Module):
         """
         alpha = torch.sigmoid(self.attn_alpha)        # bảo đảm (0,1)
         return alpha * A_g + (1 - alpha) * A_attn_h
-    
-    def forward(self, x):
-        """x: (B, N, L)"""
+
+    def forward(self, x, A_eff_override: torch.Tensor | None = None):
+        """x: (B, N, L); A_eff_override: (H, N, N) nếu đã có A_eff"""
         B, N, L = x.shape
         assert N == self.N, "num_nodes mismatch"
-        
-        # --- base & attn adjacency ---
-        if hasattr(self, "_cache_attn") and self._cache_attn is not None:
-            A_base = self._gaussian_A()  
-            A_attn = self._cache_attn            # (H,N,N) đã lấy mẫu
+
+        if A_eff_override is not None:
+            A_effs = A_eff_override                               # (H,N,N)
         else:
-            A_base = self._gaussian_A()          # (N,N) # gốc
-            A_attn = self._attn_A()              # (H,N,N)
-            
-        # --- chuẩn hoá trọng số head ---
-        mix_w = F.softmax(self.head_mix, dim=0)     # (H,)
+            A_base = self._gaussian_A()                           # (N,N)
+            A_attn = self._attn_A()                               # (H,N,N)
+            A_effs = torch.stack([self._blend(A_base, A_attn[h])  # (H,N,N)
+                                   for h in range(self.H)], dim=0)
+
+        mix_w = F.softmax(self.head_mix, dim=0)                   # (H,)
         out = 0
         for h in range(self.H):
-            A_eff = self._blend(A_base, A_attn[h]) 
-            # Chebyshev supports
+            A_eff = A_effs[h]
+
             I = torch.eye(N, device=x.device, dtype=x.dtype)
             supports = [I, A_eff]
             for k in range(2, self.K + 1):
                 supports.append(2 * A_eff @ supports[-1] - supports[-2])
-            supports = torch.stack(supports, dim=0)  # (K+1,N,N)
+            supports = torch.stack(supports, dim=0)               # (K+1,N,N)
 
-            # filter weight & bias (factorised)
             W_filter = torch.einsum('nd,dkl->nkl', self.psi_emb, self.F_w[h])  # (N,K+1,L)
-            b_filter = self.psi_emb @ self.f_b[h]                              # (N)
+            b_filter = self.psi_emb @ self.f_b[h]                                  # (N)
 
-            x_g = torch.einsum('knm,bml->bknl', supports, x)   # (B,K+1,N,L)
+            x_g = torch.einsum('knm,bml->bknl', supports, x)       # (B,K+1,N,L)
             out_h = torch.einsum('bknl,nkl->bn', x_g, W_filter) + b_filter
-            out = out + mix_w[h] * out_h                       # aggregate heads
+            out = out + mix_w[h] * out_h
         return out
-
 
 # BayesianMAGAC v1.1
 class BayesianMAGAC(MAGAC):
@@ -269,67 +276,67 @@ class BayesianMAGAC(MAGAC):
         self.register_buffer("eye_N", torch.eye(num_nodes))  # speed-up
         self._cache_attn  = None  
 
-    # ------------------------------------------
-    def train(self, mode: bool = True):
-        super().train(mode)
-        self.mc_samples = self.mc_train if mode else self.mc_eval
-        if mode:                       
-            self._cache_attn = None  
-        return self
-
     # ---------- helper -------------------------------------------------
     def _blend(self, A_g, A_attn_h):
         """α·A_gauss + (1-α)·A_attn  với α∈(0,1)"""
         alpha = torch.sigmoid(self.attn_alpha)        # bảo đảm (0,1)
         return alpha * A_g + (1 - alpha) * A_attn_h
 
-    
-    # ------------------------------------------------------------
-    def _sample_A_eff(self):
-        # 1) stochastic node embedding
-        psi_stoch = F.dropout(self.psi_emb, p=self.dropout_emb.p, training=True)
-        
-        # 2) Gaussian part
-        diff  = psi_stoch[:, None, :] - psi_stoch[None, :, :]
-        A_g   = torch.exp(-self.psi * diff.pow(2).sum(-1))
-        A_g   = F.softmax(A_g, dim=1)
+    def train(self, mode: bool = True):
+        super().train(mode)
+        self.mc_samples = self.mc_train if mode else self.mc_eval
+        return self
 
-        # 3) attention part (reuse parent)
-        A_attn = self._attn_A(psi_stoch)         # (H,N,N)
-        # blend & optional DropEdge
-        A_list = []
-        for h in range(self.H):
-            A_eff = self._blend(A_g, A_attn[h]) #self.attn_alpha * A_g + (1 - self.attn_alpha) * A_attn[h]
-            if self.training is False and self.drop_edge_p > 0.0:
-                mask = torch.bernoulli(
-                    (1 - self.drop_edge_p) * torch.ones_like(A_eff)
-                )
-                A_eff = A_eff * mask + self.eye_N * (1 - mask)  # keep self-loops
-            A_list.append(A_eff)
-        return torch.stack(A_list)               # (H,N,N)
-
-    # ------------------------------------------------------------
     def forward(self, x):
         outs = []
         if self.training:
-            # lấy 1 mẫu A_eff cho cả mini-batch, cache lại
-            self._cache_attn = self._sample_A_eff()
+            # cache 1 A_eff cho cả mini-batch để tiết kiệm compute
+            A_eff_one = self._sample_A_eff(use_dropout_on_psi=True)
+            for _ in range(self.mc_samples):
+                outs.append(super().forward(x, A_eff_override=A_eff_one))
         else:
-            # ở eval sẽ sample mỗi forward → không dùng cache
-            self._cache_attn = None
-        
-        for _ in range(self.mc_samples):
-            outs.append(super().forward(x))
+            # eval: mỗi pass là 1 sample A_eff mới (Ψ không dropout)
+            for _ in range(self.mc_samples):
+                A_eff_s = self._sample_A_eff(use_dropout_on_psi=False)
+                outs.append(super().forward(x, A_eff_override=A_eff_s))
 
-        outs = torch.stack(outs)                       # (S,B,N)
+        outs = torch.stack(outs, dim=0)                 # (S,B,N)
         mean = outs.mean(0)
-    
         if self.mc_samples == 1:
-            log_var = torch.zeros_like(mean)           # σ² = 1
+            log_var = torch.zeros_like(mean)
         else:
-            var  = outs.var(0, unbiased=False) + 1e-6
+            var = outs.var(0, unbiased=False) + 1e-6
             log_var = var.log()
         return mean, log_var
+    
+    def _sample_A_eff(self, use_dropout_on_psi: bool):
+        # (1) stochastic/deterministic node embedding
+        psi_stoch = F.dropout(self.psi_emb, p=self.dropout_emb.p, training=use_dropout_on_psi)
+
+        # (2) Gaussian part (row-stochastic)
+        diff = psi_stoch[:, None, :] - psi_stoch[None, :, :]
+        A_g  = torch.exp(-self.psi * diff.pow(2).sum(-1))
+        A_g  = F.softmax(A_g, dim=1)                               # (N,N)
+
+        # (3) Attention part từ Ψ̃
+        A_attn = self._attn_A(psi_stoch)                           # (H,N,N)
+
+        # (4) Blend + (eval-only) DropEdge + row-renorm
+        A_list = []
+        for h in range(self.H):
+            A_eff = self._blend(A_g, A_attn[h])                    # (N,N)
+
+            if (self.training is False) and (self.drop_edge_p > 0.0):
+                # drop các cạnh ngoài đường chéo, giữ self-loop
+                keep = torch.bernoulli((1 - self.drop_edge_p) * torch.ones_like(A_eff))
+                keep = keep.fill_diagonal_(1.0)
+                A_eff = A_eff * keep
+                # renorm hàng để giữ tính row-stochastic (ổn định Chebyshev)
+                A_eff = A_eff / (A_eff.sum(dim=1, keepdim=True).clamp_min(1e-6))
+
+            A_list.append(A_eff)
+        return torch.stack(A_list, dim=0)                           # (H,N,N)
+
 
 # --- Modify top-level model -----------------------------------------------
 class MAMBA_BayesMAGAC(nn.Module):
@@ -347,8 +354,11 @@ class MAMBA_BayesMAGAC(nn.Module):
 
     def forward(self, x):
         y_seq = self.bi_mamba(x)                    # (B,L,N)
-        g_node, log_var_node = self.agc_bayes(      # both (B,N)
-            y_seq.transpose(1, 2))
+        # g_node, log_var_node = self.agc_bayes(      # both (B,N)
+        #     y_seq.transpose(1, 2))
+        # MAGAC hoạt động ở dạng node-major: (B, N, L)
+        z_node = y_seq.transpose(1, 2).contiguous()  # (B, N, L)
+        g_node, log_var_node = self.agc_bayes(z_node)  # both (B, N)
 
         # --- Linear head ---
         w = self.head.weight.squeeze(0)             # (N,)
@@ -359,47 +369,14 @@ class MAMBA_BayesMAGAC(nn.Module):
                             log_var_node.exp(),      # σ²_node
                             w.pow(2)) + 1e-6
         log_var = var.log()                         # (B,)
-
         return mu, log_var
 
 
-# --- MAMBA_BayesMAGAC top-level model -----------------------------------------------
-class MAMBA_BayesMAGAC(nn.Module):
-    def __init__(self, args: ModelArgs, R: int = 3, K: int = 3,
-                 d_e: int = 10, mc_train=3, mc_eval=20, drop_edge_p=0.1, mc_dropout_p=0.2):
-        super().__init__()
-        self.bi_mamba = BIMambaBlock(args, R=R)
-        self.agc_bayes = BayesianMAGAC(
-            args.d_model, args.seq_len, K, d_e, heads=4,
-            mc_train=mc_train, mc_eval=mc_eval,
-            drop_edge_p=drop_edge_p, mc_dropout_p=mc_dropout_p
-        )
-        self.head = nn.Linear(args.d_model, 1)
-
-    def forward(self, x):
-        y_seq = self.bi_mamba(x)                    # (B,L,N)
-        g_node, log_var_node = self.agc_bayes(      # both (B,N)
-            y_seq.transpose(1, 2))
-
-        # --- Linear head ---
-        w = self.head.weight.squeeze(0)             # (N,)
-        b = self.head.bias                          # (1,)
-
-        mu   = torch.einsum('bn,n->b', g_node, w) + b   # (B,)
-        var  = torch.einsum('bn,n->b',               # (B,)
-                            log_var_node.exp(),      # σ²_node
-                            w.pow(2)) + 1e-6
-        log_var = var.log()                         # (B,)
-
-        return mu, log_var
-
-
-# >>> TRAINER - BAYESIAN OBJ <<<
-# Gaussian Negative-Log-Likelihood
-# ---------------------------------------------------------------------------        
+# >>> TRAINER - NEW 2 <<<
 class Trainer(object):
-    """Minimal yet full featured Trainer for SAMBA."""
+    """Minimal yet full featured Trainer for MAMBA_BGNN (probabilistic)."""
 
+    # ================= init =================
     def __init__(self, model, loss_fn, optimizer, train_loader, val_loader, test_loader,
                  args, lr_scheduler=None):
         self.model = model
@@ -410,98 +387,212 @@ class Trainer(object):
         self.test_loader = test_loader
         self.args = args
         self.lr_scheduler = lr_scheduler
+
+        os.makedirs(self.args['log_dir'], exist_ok=True)
         self.logger = self._get_logger()
+
         self.best_state, self.best_loss = None, float('inf')
         self.not_improved = 0
         self.best_path = os.path.join(args.get('log_dir'), 'best_model.pth')
 
-    # ------------- helpers -------------
+        # --- CSV paths & headers (MAIN TABLE) ---
+        self.val_csv  = os.path.join(self.args['log_dir'], 'val_metrics.csv')
+        self.test_csv = os.path.join(self.args['log_dir'], 'test_metrics.csv')
+        self.test_pred_csv = os.path.join(self.args['log_dir'], 'test_predictions.csv')
+        self.best_val_pred_csv = os.path.join(self.args['log_dir'], 'val_predictions_best.csv')
+
+        self.val_header  = ['epoch','nll','rmse','mae','ic','ric','crps','sharp',
+                            'picp90','gap90','picp95','gap95','aurc']
+        self.test_header = ['nll','rmse','mae','ic','ric','crps','sharp',
+                            'picp90','gap90','picp95','gap95','aurc']
+
+        self._init_csv(self.val_csv,  self.val_header)
+        self._init_csv(self.test_csv, self.test_header)
+
+    # ================= logging & csv utils =================
     def _get_logger(self):
-        log_dir = self.args['log_dir']
-        os.makedirs(log_dir, exist_ok=True)
         model_name = self.args['model_name'] + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger = logging.getLogger(model_name)
         logger.setLevel(logging.DEBUG)
-        fh = logging.FileHandler(self.args['log_dir'] + '/' + model_name +'.log')
-        sh  = logging.StreamHandler()
+        fh = logging.FileHandler(os.path.join(self.args['log_dir'], model_name + '.log'))
+        sh = logging.StreamHandler()
         fmt = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s', '%Y-%m-%d %H:%M')
         sh.setFormatter(fmt)
-        logger.addHandler(sh)
-        logger.addHandler(fh)
+        logger.addHandler(sh); logger.addHandler(fh)
         return logger
 
-    # ------------- training loops -------------
+    def _init_csv(self, path, header):
+        if not os.path.exists(path):
+            with open(path, 'w', newline='') as f:
+                csv.writer(f).writerow(header)
+
+    def _append_csv(self, path, header, row_dict):
+        row = []
+        for k in header:
+            v = row_dict[k]
+            if isinstance(v, torch.Tensor):
+                v = v.detach().cpu().item()
+            if isinstance(v, (np.generic,)):
+                v = float(v)
+            row.append(v)
+        with open(path, 'a', newline='') as f:
+            csv.writer(f).writerow(row)
+
+    def _dump_predictions(self, path, mu, sigma, y):
+        df = pd.DataFrame({
+            'y': y.detach().cpu().numpy().astype(float),
+            'mu': mu.detach().cpu().numpy().astype(float),
+            'sigma': sigma.detach().cpu().numpy().astype(float),
+        })
+        df.to_csv(path, index=False)
+
+    # ================= probabilistic helpers =================
+    @staticmethod
+    def _to_sigma(log_var: torch.Tensor) -> torch.Tensor:
+        return torch.exp(0.5 * log_var).clamp_min(1e-8)
+
+    @staticmethod
+    def _crps_gaussian(mu: torch.Tensor, sigma: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        # Closed-form CRPS for N(mu, sigma^2):
+        # CRPS = sigma * [ z*(2Φ(z)-1) + 2φ(z) - 1/√π ],  z=(y-mu)/sigma
+        sigma = sigma.clamp_min(1e-8)
+        z = (y - mu) / sigma
+        try:
+            Phi = torch.special.ndtr(z)
+        except AttributeError:
+            Phi = 0.5 * (1.0 + torch.erf(z / math.sqrt(2.0)))
+        phi = torch.exp(-0.5 * z**2) / math.sqrt(2*math.pi)
+        crps = sigma * (z * (2*Phi - 1) + 2*phi - 1.0/math.sqrt(math.pi))
+        return torch.clamp(crps, min=0.0)
+
+    @staticmethod
+    def _picp_and_gap(mu: torch.Tensor, sigma: torch.Tensor, y: torch.Tensor, q: float):
+        # central interval coverage at nominal q (e.g., q=0.90)
+        p = (1.0 + q)/2.0
+        try:
+            z = math.sqrt(2.0) * torch.erfinv(torch.tensor(2.0*p - 1.0, device=mu.device, dtype=mu.dtype))
+        except AttributeError:
+            z = math.sqrt(2.0) * torch.special.erfinv(torch.tensor(2.0*p - 1.0, device=mu.device, dtype=mu.dtype))
+        lo, hi = mu - z*sigma, mu + z*sigma
+        obs = ((y >= lo) & (y <= hi)).float().mean().item()
+        gap = abs(obs - q)
+        return obs, gap
+
+    @staticmethod
+    def _aurc_rmse(y: torch.Tensor, mu: torch.Tensor, sigma: torch.Tensor, points: int = 10) -> float:
+        # Risk–Coverage AUC for RMSE (lower better)
+        idx = torch.argsort(sigma)  # most certain first
+        y, mu = y[idx], mu[idx]
+        covs = torch.linspace(0.1, 1.0, points, device=y.device)
+        prev = None; auc = 0.0
+        for i, c in enumerate(covs):
+            k = max(1, int(c.item()*y.numel()))
+            rmse_c = torch.sqrt(torch.mean((y[:k]-mu[:k])**2)).item()
+            if i > 0:
+                h = (covs[i] - covs[i-1]).item()
+                auc += 0.5 * h * (prev + rmse_c)
+            prev = rmse_c
+        return auc
+
+    # ================= training loops =================
     def _run_epoch(self, epoch):
-        self.model.train(); total = 0
+        self.model.train(); total = 0.0
         for step, (x, y) in enumerate(self.train_loader):
             self.opt.zero_grad()
-            # Gaussian Negative-Log-Likelihood
-            mu, log_var = self.model(x)
-            loss = self.loss_fn(mu, y.squeeze(), log_var.exp())
+            mu, log_var = self.model(x)                               # (B,), (B,)
+            loss = self.loss_fn(mu, y.squeeze(), log_var.exp())       # NLL
             loss.backward()
             if self.args['grad_norm']:
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args['max_grad_norm'])
             self.opt.step()
             total += loss.item()
             if step % self.args['log_step'] == 0:
-                self.logger.info(f"Epoch {epoch} [{step}/{len(self.train_loader)}] Loss: {loss.item():.6f}")
+                self.logger.info(f"Epoch {epoch} [{step}/{len(self.train_loader)}] Loss(NLL): {loss.item():.6f}")
         if self.lr_scheduler: self.lr_scheduler.step()
         train_loss = total / len(self.train_loader)
-        self.logger.info(f"Epoch {epoch} Train Loss: {train_loss:.6f}")
+        self.logger.info(f"Epoch {epoch} Train NLL: {train_loss:.6f}")
         return train_loss
 
     def _validate(self, epoch):
-        self.model.eval(); total = 0
-        preds, trues = [], []
+        self.model.eval(); total = 0.0
+        preds, trues, logvars = [], [], []
         with torch.no_grad():
             for x, y in self.val_loader:
-                # Gaussian Negative-Log-Likelihood
                 mu, log_var = self.model(x)
-                loss = self.loss_fn(mu, y.squeeze(), log_var.exp())
-                total += loss.item()
-                preds.append(mu); trues.append(y.squeeze())
-                # <<
-        val_loss = total / len(self.val_loader)
-        self.logger.info(f"Epoch {epoch} Validation Loss: {val_loss:.6f}")
+                total += self.loss_fn(mu, y.squeeze(), log_var.exp()).item()
+                preds.append(mu); trues.append(y.squeeze()); logvars.append(log_var.squeeze())
+        nll = total / len(self.val_loader)
 
-        preds = torch.cat(preds, 0).squeeze(-1)
-        trues = torch.cat(trues, 0).squeeze(-1)
+        preds   = torch.cat(preds, 0).squeeze(-1)
+        trues   = torch.cat(trues, 0).squeeze(-1)
+        logvars = torch.cat(logvars, 0).squeeze(-1)
+        sigmas  = self._to_sigma(logvars)
+
+        # ---- MAIN metrics ----
+        rmse = torch.sqrt(torch.mean((trues - preds)**2))
         mae  = torch.mean(torch.abs(trues - preds))
-        rmse = torch.sqrt(torch.mean((trues - preds) ** 2))
         ic   = self.pearson(trues, preds)
         ric  = self.ric(trues, preds)
-        self.logger.info(f"\t VAL  MAE:{mae:.4f}  RMSE:{rmse:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}")
-        return val_loss
+        crps = self._crps_gaussian(preds, sigmas, trues).mean()
+        sharp = sigmas.mean()
+        picp90, gap90 = self._picp_and_gap(preds, sigmas, trues, q=0.90)
+        picp95, gap95 = self._picp_and_gap(preds, sigmas, trues, q=0.95)
+        aurc = self._aurc_rmse(trues, preds, sigmas, points=10)
+
+        self.logger.info(
+            f"VAL  RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  "
+            f"NLL:{nll:.5f}  CRPS:{crps:.5f}  Sharp(σ):{sharp:.5f}  "
+            f"PICP90:{picp90:.3f}|Gap:{gap90:.3f}  PICP95:{picp95:.3f}|Gap:{gap95:.3f}  "
+            f"AURC:{aurc:.5f}"
+        )
+
+        # write CSV row
+        # row = {'epoch': int(epoch), 'nll': nll.item(), 'rmse': rmse.item(), 'mae': mae.item(),
+        #        'ic': ic.item(), 'ric': ric.item(), 'crps': crps.item(), 'sharp': sharp.item(),
+        #        'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
+        row = {'epoch': int(epoch), 'nll': nll, 'rmse': rmse, 'mae': mae,
+               'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
+               'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
+        self._append_csv(self.val_csv, self.val_header, row)
+
+        # return bundle to dump best-val predictions later
+        return nll, (preds, sigmas, trues)
 
     def train(self):
+        best_bundle = None
         for epoch in range(1, self.args['epochs'] + 1):
-            tr_loss = self._run_epoch(epoch)
-            val_loss = self._validate(epoch)
-            if val_loss < self.best_loss:
-                self.best_loss = val_loss
+            _ = self._run_epoch(epoch)
+            nll, bundle = self._validate(epoch)
+            if nll < self.best_loss:
+                self.best_loss = nll
                 self.best_state = copy.deepcopy(self.model.state_dict())
                 self.not_improved = 0
-                self.logger.info('--- New best model ---')
+                self.logger.info('--- New best model (by VAL NLL) ---')
                 torch.save(self.best_state, self.best_path)
+                best_bundle = bundle
             else:
                 self.not_improved += 1
             if self.args['early_stop'] and self.not_improved >= self.args['early_stop_patience']:
                 self.logger.info('Early stopping triggered.')
                 break
-        self.model.load_state_dict(self.best_state)
+        if self.best_state is not None:
+            self.model.load_state_dict(self.best_state)
+        if best_bundle is not None:
+            mu_b, sigma_b, y_b = best_bundle
+            self._dump_predictions(self.best_val_pred_csv, mu_b, sigma_b, y_b)
 
-    # ------------- metrics & test -------------
+    # ================ metrics & test ================
     @staticmethod
     def pearson(x, y):
         vx, vy = x - x.mean(), y - y.mean()
-        return (vx * vy).sum() / (torch.sqrt((vx ** 2).sum()) * torch.sqrt((vy ** 2).sum()))
+        return (vx * vy).sum() / (torch.sqrt((vx ** 2).sum()) * torch.sqrt((vy ** 2).sum()) + 1e-12)
 
     @staticmethod
     def rank_tensor(x):
         flat = x.view(-1)
         idx = torch.argsort(flat)
         ranks = torch.empty_like(flat, dtype=torch.float32)
-        ranks[idx] = torch.arange(1, flat.numel() + 1, dtype=torch.float32)
+        ranks[idx] = torch.arange(1, flat.numel() + 1, dtype=torch.float32, device=x.device)
         return ranks.view_as(x)
 
     @staticmethod
@@ -510,21 +601,44 @@ class Trainer(object):
         return Trainer.pearson(rx, ry)
 
     def test(self):
-        self.model.eval(); preds, trues = [], []
+        self.model.eval(); preds, trues, logvars = [], [], []
+        nll_total = 0.0
         with torch.no_grad():
             for x, y in self.test_loader:
                 mu, log_var = self.model(x)
-                preds.append(mu)
-                trues.append(y.squeeze())
-        preds = torch.cat(preds, 0).squeeze(-1)
-        trues = torch.cat(trues, 0).squeeze(-1)
+                nll_total += self.loss_fn(mu, y.squeeze(), log_var.exp()).item()
+                preds.append(mu); trues.append(y.squeeze()); logvars.append(log_var.squeeze())
+
+        preds   = torch.cat(preds, 0).squeeze(-1)
+        trues   = torch.cat(trues, 0).squeeze(-1)
+        logvars = torch.cat(logvars, 0).squeeze(-1)
+        sigmas  = self._to_sigma(logvars)
+        nll = nll_total / max(1, len(self.test_loader))
+
+        rmse = torch.sqrt(torch.mean((trues - preds)**2))
         mae  = torch.mean(torch.abs(trues - preds))
-        rmse = torch.sqrt(torch.mean((trues - preds) ** 2))
         ic   = self.pearson(trues, preds)
         ric  = self.ric(trues, preds)
-        self.logger.info(f"TEST  MAE:{mae:.4f}  RMSE:{rmse:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}")
-        return mae, rmse, ic, ric
+        crps = self._crps_gaussian(preds, sigmas, trues).mean()
+        sharp = sigmas.mean()
+        picp90, gap90 = self._picp_and_gap(preds, sigmas, trues, q=0.90)
+        picp95, gap95 = self._picp_and_gap(preds, sigmas, trues, q=0.95)
+        aurc = self._aurc_rmse(trues, preds, sigmas, points=10)
 
+        self.logger.info(
+            f"TEST RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  "
+            f"NLL:{nll:.5f}  CRPS:{crps:.5f}  Sharp(σ):{sharp:.5f}  "
+            f"PICP90:{picp90:.3f}|Gap:{gap90:.3f}  PICP95:{picp95:.3f}|Gap:{gap95:.3f}  "
+            f"AURC:{aurc:.5f}"
+        )
+        row = { 'nll': nll, 'rmse': rmse, 'mae': mae,
+               'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
+               'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
+        self._append_csv(self.test_csv, self.test_header, row)
+
+        self._dump_predictions(self.test_pred_csv, preds, sigmas, trues)
+
+        return mae, rmse, ic, ric
 
 #  >>> DATA PROCESSING <<<  
 # ===========================================================================
