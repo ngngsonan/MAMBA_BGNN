@@ -34,7 +34,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from einops import rearrange, einsum, repeat
-from MAMBA_BGNN.result_plot import plot_analytics
+from result_plot import plot_analytics
 
 # ---------------------------- Model Arguments ----------------------------
 @dataclass
