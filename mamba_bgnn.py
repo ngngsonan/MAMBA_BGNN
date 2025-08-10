@@ -627,7 +627,7 @@ def main(dataset):
     args = {
         'epochs': 1500,
         'early_stop': True,
-        'early_stop_patience': 10,
+        'early_stop_patience': 20,
         'grad_norm': False,
         'max_grad_norm': 5.0,
         'log_dir': f'{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
