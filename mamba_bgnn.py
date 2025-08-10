@@ -34,6 +34,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from einops import rearrange, einsum, repeat
+from MAMBA_BGNN.result_plot import plot_analytics
 
 # ---------------------------- Model Arguments ----------------------------
 @dataclass
@@ -626,7 +627,7 @@ def main(dataset):
     args = {
         'epochs': 1500,
         'early_stop': True,
-        'early_stop_patience': 20,
+        'early_stop_patience': 10,
         'grad_norm': False,
         'max_grad_norm': 5.0,
         'log_dir': f'./{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
@@ -649,6 +650,7 @@ def main(dataset):
                     args=args, lr_scheduler=scheduler)
     trainer_v3.train()
     trainer_v3.test()
+    plot_analytics(trainer_v3.args['log_dir'])
 
 if __name__ == "__main__":
     main('IXIC')
