@@ -617,8 +617,8 @@ def main(dataset):
 
     # hyper‑parameters
     window      = 5     # history length L
-    batch_size  = 128   # per paper
-    data_path = f'./Dataset/combined_dataframe_{dataset}.csv'
+    batch_size  = 128   # batch_size
+    data_path = f'Dataset/combined_dataframe_{dataset}.csv'
 
     N, train_loader, val_loader, test_loader = data_processing(data_path, window, batch_size)
     L = window
@@ -632,7 +632,7 @@ def main(dataset):
         'max_grad_norm': 5.0,
         'log_dir': f'./{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
         'model_name': f'{dataset}_v3',
-        'log_step': 30,
+        'log_step': 20,
     }
     print(f'data_path: {data_path}')
     print(f'Args {args}, N: {N}, L: {window}, batch_size: {batch_size}, Model_Args: {m_args}')
