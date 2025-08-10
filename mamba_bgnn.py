@@ -35,6 +35,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from einops import rearrange, einsum, repeat
+from result_plot import plot_analysis
 
 # ---------------------------- Model Arguments ----------------------------
 @dataclass
