@@ -618,7 +618,7 @@ def main(dataset):
     # hyper‑parameters
     window      = 5     # history length L
     batch_size  = 128   # per paper
-    data_path = f'/content/MAMBA_BGNN/Dataset/combined_dataframe_{dataset}.csv'
+    data_path = f'./Dataset/combined_dataframe_{dataset}.csv'
 
     N, train_loader, val_loader, test_loader = data_processing(data_path, window, batch_size)
     L = window
