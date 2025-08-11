@@ -78,23 +78,39 @@ Expected format:
 conda create -n py310 python=3.10
 conda activate py310
 
-# Install CUDA-enabled PyTorch
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# Install dependencies
+pip install -r requirements.txt
 
-# Install other dependencies
-pip install numpy pandas matplotlib einops scipy h5py
+# Or install manually:
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install numpy pandas matplotlib einops scipy h5py scikit-learn seaborn
 ```
 
-### Single Command Execution
+### Comprehensive Evaluation (Recommended)
 ```bash
+# Run complete evaluation addressing all reviewer concerns
+python run_comprehensive_evaluation.py --all
+
+# Run specific dataset with enhanced model
+python run_comprehensive_evaluation.py --dataset IXIC --enhanced
+
+# Quick test run
+python run_comprehensive_evaluation.py --dataset DJI --quick
+```
+
+This comprehensive framework:
+1. **Ensures Input Uniformity**: All baselines use identical 82-feature input
+2. **Documents Temporal Context**: Exact train/test periods with market analysis
+3. **Provides Financial Metrics**: Sharpe ratio, P&L, drawdown, directional accuracy
+4. **Compares SOTA Methods**: Transformers, Temporal GNNs, modern baselines
+5. **Includes Ablation Studies**: Component-wise model validation
+6. **Analyzes Market Regimes**: Performance across stable vs volatile periods
+
+### Original Single Model Execution
+```bash
+# Run original implementation
 python mamba_bgnn.py
 ```
-
-This will automatically:
-1. Train models on all three datasets (IXIC, DJI, NYSE)
-2. Generate comprehensive evaluation metrics
-3. Create visualization plots
-4. Save results in timestamped directories
 
 ### Manual Dataset Selection
 ```python
@@ -219,12 +235,84 @@ Replace `nn.GaussianNLLLoss` in the trainer setup for different probabilistic lo
 - **Training Time**: ~1-2 hours per dataset on modern GPU
 - **Inference Speed**: Real-time capable with reduced MC samples
 
+## Addressing Reviewer Concerns
+
+This implementation specifically addresses academic reviewer feedback with:
+
+### 1. Input Data Uniformity ✅
+- All baseline models use identical 82-feature input structure
+- Uniform L=5 historical window across all comparisons
+- Consistent preprocessing and normalization
+
+### 2. Temporal Context Specification ✅
+- Exact train/validation/test date ranges documented
+- Market regime analysis across different periods  
+- Temporal information preserved for reproducibility
+
+### 3. Financial Relevance ✅
+- Comprehensive financial metrics: Sharpe ratio, P&L, drawdown
+- Directional accuracy focus for practical trading applications
+- Transaction cost consideration in strategy evaluation
+
+### 4. SOTA Baseline Comparisons ✅
+- Modern baselines: Transformers, Temporal Graph Networks, AGCRN
+- Fair evaluation with identical hyperparameters and resources
+- Uniform computational allocation across methods
+
+### 5. Scientific Rigor ✅
+- Comprehensive ablation studies validating each model component
+- Market regime analysis (stable vs volatile periods)
+- Stress testing on extreme market conditions
+- Reproducible evaluation framework with detailed logging
+
+See `REVIEWER_RESPONSE.md` for detailed documentation of all improvements.
+
+## Enhanced Features
+
+### Multi-Task Learning
+- Combined return prediction and directional classification
+- Shared representations for improved performance
+- Enhanced uncertainty quantification
+
+### Market Regime Analysis  
+- Automatic classification of market conditions
+- Performance analysis across stable vs volatile periods
+- Stress testing during extreme market events
+
+### Comprehensive Baselines
+All baselines implemented with identical input structure:
+- **LSTM**: Bidirectional LSTM with probabilistic outputs
+- **Transformer**: Multi-head attention with positional encoding  
+- **AGCRN**: Adaptive Graph Convolution RNN
+- **TemporalGN**: Temporal Graph Networks with attention
+- **Linear**: Simple linear baseline
+
+## File Structure
+
+```
+MAMBA_BGNN/
+├── mamba_bgnn.py                    # Original implementation
+├── enhanced_mamba_bgnn.py           # Enhanced model with directional prediction
+├── baseline_models.py               # Uniform baseline implementations
+├── financial_metrics.py             # Comprehensive financial evaluation
+├── comprehensive_evaluation.py      # Complete evaluation framework
+├── run_comprehensive_evaluation.py  # Master evaluation script
+├── result_plot.py                   # Visualization utilities
+├── requirements.txt                 # Dependencies
+├── REVIEWER_RESPONSE.md             # Detailed response to reviewer concerns
+├── Dataset/                         # Input data files
+├── README.md                        # This file
+└── *_log*/                         # Output directories
+```
+
 ## References
 
 The implementation draws from:
 - Mamba: Linear-Time Sequence Modeling with Selective State Spaces
-- Graph Neural Networks for Financial Time Series
+- Graph Neural Networks for Financial Time Series  
 - Bayesian Deep Learning for Uncertainty Quantification
+- Temporal Graph Networks for Dynamic Systems
+- Multi-task Learning for Financial Prediction
 
 ## License
 
