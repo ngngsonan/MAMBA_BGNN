@@ -1,0 +1,77 @@
+{
+  "timestamp": "2025-08-11T12:33:14.651600",
+  "dataset": "DJI",
+  "temporal_info": {
+    "period": "2010-01-04 to 2023-10-16",
+    "total_samples": 3470,
+    "train_period": "2010-01-04 to 2021-01-13 (2772 samples)",
+    "val_period": "2021-01-14 to 2021-09-21 (173 samples)",
+    "test_period": "2021-09-22 to 2023-10-16 (520 samples)",
+    "train_start": "2010-01-04",
+    "train_end": "2021-01-13",
+    "test_start": "2021-09-22",
+    "test_end": "2023-10-16"
+  },
+  "model_results": {
+    "MAMBA_BGNN": {
+      "RMSE": 0.007740403525531292,
+      "MAE": 0.0061003416776657104,
+      "Directional_Accuracy": 0.8759999871253967,
+      "Sharpe_Ratio": 0.8826320784042748,
+      "Max_Drawdown": -0.17540417611598969,
+      "Net_Return": 210.71384826660156,
+      "Correlation": 0.8900965452194214,
+      "Hit_Rate": 0.8759999871253967
+    },
+    "Transformer": {
+      "RMSE": 0.012675519101321697,
+      "MAE": 0.010126333683729172,
+      "Directional_Accuracy": 0.7319999933242798,
+      "Sharpe_Ratio": 0.6749502131900361,
+      "Max_Drawdown": -0.22112014889717102,
+      "Net_Return": 52.96759741210938,
+      "Correlation": 0.7618197202682495,
+      "Hit_Rate": 0.7319999933242798
+    },
+    "LSTM": {
+      "RMSE": 0.014880970120429993,
+      "MAE": 0.011868824250996113,
+      "Directional_Accuracy": 0.7480000257492065,
+      "Sharpe_Ratio": -0.2918936401214953,
+      "Max_Drawdown": -0.36075320839881897,
+      "Net_Return": 66.50311767578125,
+      "Correlation": 0.696651816368103,
+      "Hit_Rate": 0.7480000257492065
+    },
+    "AGCRN": {
+      "RMSE": 0.01396744791418314,
+      "MAE": 0.011304808780550957,
+      "Directional_Accuracy": 0.7839999794960022,
+      "Sharpe_Ratio": 1.4643123611246598,
+      "Max_Drawdown": -0.26347047090530396,
+      "Net_Return": 87.69531848144531,
+      "Correlation": 0.7544168829917908,
+      "Hit_Rate": 0.7839999794960022
+    },
+    "TemporalGN": {
+      "RMSE": 0.010929137468338013,
+      "MAE": 0.008747815154492855,
+      "Directional_Accuracy": 0.7760000228881836,
+      "Sharpe_Ratio": 1.1951285694028115,
+      "Max_Drawdown": -0.1705438792705536,
+      "Net_Return": 93.7839448852539,
+      "Correlation": 0.7886331677436829,
+      "Hit_Rate": 0.7760000228881836
+    },
+    "Linear": {
+      "RMSE": 0.017116665840148926,
+      "MAE": 0.013692785054445267,
+      "Directional_Accuracy": 0.7360000014305115,
+      "Sharpe_Ratio": 1.7787196325816126,
+      "Max_Drawdown": -0.17446358501911163,
+      "Net_Return": 58.11110147094727,
+      "Correlation": 0.6603296995162964,
+      "Hit_Rate": 0.7360000014305115
+    }
+  }
+}

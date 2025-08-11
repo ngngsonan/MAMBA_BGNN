@@ -109,10 +109,15 @@ class MultiTaskHead(nn.Module):
         # Directional prediction head (classification)
         self.direction_logits = nn.Linear(input_dim // 2, 3)  # up, down, neutral
         
-        # Cross-task attention
+        # Cross-task attention (ensure embed_dim is divisible by num_heads)
+        embed_dim = input_dim // 2
+        num_heads = min(4, embed_dim)  # Ensure compatibility
+        if embed_dim % num_heads != 0:
+            num_heads = 1  # Fallback to single head
+        
         self.cross_attn = nn.MultiheadAttention(
-            embed_dim=input_dim // 2,
-            num_heads=4,
+            embed_dim=embed_dim,
+            num_heads=num_heads,
             batch_first=True
         )
         
