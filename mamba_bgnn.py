@@ -641,6 +641,280 @@ class Trainer(object):
 
         return mae, rmse, ic, ric
 
+# -------------- Portfolio & Evaluation Helper Functions --------------
+def calculate_returns_and_positions(prices, predictions, transaction_cost=0.001):
+    """
+    Calculate portfolio returns and positions with transaction costs
+    
+    Args:
+        prices (np.ndarray): Asset prices
+        predictions (np.ndarray): Model predictions
+        transaction_cost (float): Cost per trade as decimal
+        
+    Returns:
+        tuple: (positions, portfolio_returns, turnover)
+    """
+    # Ensure numpy arrays
+    prices = np.asarray(prices)
+    predictions = np.asarray(predictions)
+    
+    # Calculate actual returns
+    actual_returns = (prices[1:] - prices[:-1]) / prices[:-1]
+    
+    # Generate positions from predictions (1=long, -1=short, 0=neutral)
+    positions = np.sign(predictions[:-1])  # align with returns
+    
+    # Calculate turnover (position changes)
+    turnover = np.abs(positions[1:] - positions[:-1]).mean()
+    
+    # Apply transaction costs when position changes
+    position_changes = np.abs(positions[1:] - positions[:-1])
+    costs = position_changes * transaction_cost
+    
+    # Calculate portfolio returns after costs
+    portfolio_returns = positions[1:] * actual_returns[1:] - costs
+    
+    return positions, portfolio_returns, turnover
+
+def calculate_portfolio_metrics(portfolio_returns, positions, benchmark_returns=None):
+    """
+    Calculate comprehensive portfolio performance metrics
+    
+    Args:
+        portfolio_returns (np.ndarray): Portfolio returns after costs
+        positions (np.ndarray): Portfolio positions
+        benchmark_returns (np.ndarray, optional): Benchmark returns for comparison
+        
+    Returns:
+        dict: Performance metrics
+    """
+    # Annualization factor (252 trading days)
+    annual_factor = np.sqrt(252)
+    
+    # Basic return metrics
+    mean_ret = portfolio_returns.mean()
+    std_ret = portfolio_returns.std()
+    sharpe = mean_ret / std_ret * annual_factor if std_ret > 0 else 0
+    
+    # Drawdown analysis
+    cum_returns = np.cumprod(1 + portfolio_returns)
+    running_max = np.maximum.accumulate(cum_returns)
+    drawdowns = (running_max - cum_returns) / running_max
+    max_drawdown = drawdowns.max()
+    
+    # Calmar ratio (annualized return / max drawdown)
+    calmar = (mean_ret * 252) / max_drawdown if max_drawdown > 0 else np.inf
+    
+    # Hit rate and profit metrics
+    hits = portfolio_returns > 0
+    hit_rate = np.mean(hits)
+    
+    profit_factor = np.abs(portfolio_returns[hits].sum() / 
+                          portfolio_returns[~hits].sum()) if np.any(~hits) else np.inf
+    
+    # Information ratio if benchmark provided
+    info_ratio = None
+    if benchmark_returns is not None:
+        tracking_error = (portfolio_returns - benchmark_returns).std() * annual_factor
+        info_ratio = ((portfolio_returns - benchmark_returns).mean() * 252) / tracking_error if tracking_error > 0 else 0
+    
+    return {
+        'total_return': (cum_returns[-1] - 1),
+        'annual_return': mean_ret * 252,
+        'annual_vol': std_ret * annual_factor,
+        'sharpe_ratio': sharpe,
+        'max_drawdown': max_drawdown,
+        'calmar_ratio': calmar,
+        'hit_rate': hit_rate,
+        'profit_factor': profit_factor,
+        'info_ratio': info_ratio
+    }
+
+# -------------- Rolling Window Evaluation --------------
+class RollingWindowEvaluator:
+    """
+    Handles rolling window evaluation of model performance
+    """
+    def __init__(self, model, window_size=63, step_size=21):
+        """
+        Args:
+            model: Trained model instance
+            window_size (int): Size of evaluation window (default ~3 months)
+            step_size (int): Steps between windows (default ~1 month)
+        """
+        self.model = model
+        self.window_size = window_size
+        self.step_size = step_size
+        
+    def evaluate(self, data_loader, transaction_cost=0.001):
+        """
+        Perform rolling window evaluation
+        
+        Args:
+            data_loader: PyTorch DataLoader with test data
+            transaction_cost: Trading cost per trade
+            
+        Returns:
+            tuple: (DataFrame with window results, DataFrame with summary statistics)
+        """
+        # Collect all data
+        all_x, all_y = [], []
+        with torch.no_grad():
+            for x, y in data_loader:
+                all_x.append(x)
+                all_y.append(y)
+        X = torch.cat(all_x, 0)
+        Y = torch.cat(all_y, 0).squeeze(-1)
+        
+        window_results = []
+        
+        # Evaluate each window
+        for start_idx in range(0, len(X)-self.window_size, self.step_size):
+            end_idx = start_idx + self.window_size
+            
+            # Get window data
+            x_window = X[start_idx:end_idx]
+            y_window = Y[start_idx:end_idx]
+            
+            # Get predictions
+            with torch.no_grad():
+                preds, logvars = self.model(x_window)
+                preds = preds.squeeze(-1)
+                sigmas = torch.exp(0.5 * logvars.squeeze(-1))
+            
+            # Convert to numpy for calculations
+            preds_np = preds.cpu().numpy()
+            y_np = y_window.cpu().numpy()
+            
+            # Calculate positions and returns
+            positions, port_returns, turnover = calculate_returns_and_positions(
+                y_np, preds_np, transaction_cost)
+            
+            # Calculate metrics for this window
+            metrics = calculate_portfolio_metrics(port_returns, positions)
+            
+            # Add directional accuracy
+            dir_acc = np.mean(np.sign(preds_np[1:]) == np.sign(y_np[1:] - y_np[:-1]))
+            
+            # Add uncertainty metrics
+            uncertainty_metrics = {
+                'avg_sigma': sigmas.mean().item(),
+                'sigma_std': sigmas.std().item()
+            }
+            
+            # Combine all metrics
+            window_metrics = {
+                'window_start': start_idx,
+                'window_end': end_idx,
+                'dir_accuracy': dir_acc,
+                'turnover': turnover
+            }
+            window_metrics.update(metrics)
+            window_metrics.update(uncertainty_metrics)
+            
+            window_results.append(window_metrics)
+        
+        # Convert to DataFrame
+        results_df = pd.DataFrame(window_results)
+        
+        # Calculate summary statistics
+        summary_stats = results_df.describe()
+        
+        return results_df, summary_stats
+
+# -------------- Extended Trainer Class --------------
+class ExtendedTrainer(Trainer):
+    """
+    Extended Trainer with enhanced evaluation capabilities
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Add new metrics to headers
+        self.test_header.extend([
+            'dir_accuracy', 'turnover', 'sharpe_ratio', 
+            'max_drawdown', 'calmar_ratio', 'hit_rate',
+            'profit_factor', 'total_return', 'annual_return'
+        ])
+        
+        # Initialize rolling window evaluator
+        self.rolling_evaluator = RollingWindowEvaluator(
+            model=self.model,
+            window_size=63,  # ~3 months
+            step_size=21     # ~1 month
+        )
+    
+    def test(self):
+        """Enhanced test method with comprehensive evaluation"""
+        # Load best model state
+        self.model.load_state_dict(self.best_state)
+        self.model.eval()
+        
+        preds, trues, logvars = [], [], []
+        
+        # Collect predictions
+        with torch.no_grad():
+            for x, y in self.test_loader:
+                mu, log_var = self.model(x)
+                preds.append(mu)
+                trues.append(y)
+                logvars.append(log_var)
+        
+        # Concatenate all predictions
+        preds = torch.cat(preds, 0).squeeze(-1)
+        trues = torch.cat(trues, 0).squeeze(-1)
+        logvars = torch.cat(logvars, 0).squeeze(-1)
+        
+        # Convert to numpy for calculations
+        preds_np = preds.cpu().numpy()
+        trues_np = trues.cpu().numpy()
+        
+        # Calculate positions and returns
+        positions, port_returns, turnover = calculate_returns_and_positions(
+            trues_np, preds_np)
+        
+        # Calculate portfolio metrics
+        port_metrics = calculate_portfolio_metrics(port_returns, positions)
+        
+        # Calculate directional accuracy
+        dir_acc = np.mean(np.sign(preds_np[1:]) == np.sign(trues_np[1:] - trues_np[:-1]))
+        
+        # Perform rolling window evaluation
+        window_results, window_stats = self.rolling_evaluator.evaluate(
+            self.test_loader)
+        
+        # Combine all metrics
+        metrics = {
+            'dir_accuracy': dir_acc,
+            'turnover': turnover
+        }
+        metrics.update(port_metrics)
+        
+        # Save results
+        self._append_csv(self.test_csv, self.test_header, metrics)
+        window_results.to_csv(os.path.join(self.args['log_dir'], 'rolling_window_results.csv'))
+        window_stats.to_csv(os.path.join(self.args['log_dir'], 'rolling_window_stats.csv'))
+        
+        # Log results
+        self._log_test_results(metrics, window_stats)
+        
+        return metrics
+    
+    def _log_test_results(self, metrics, window_stats):
+        """Log test results in a formatted way"""
+        self.logger.info("\n" + "="*50)
+        self.logger.info("Test Results:")
+        for k, v in metrics.items():
+            if isinstance(v, float):
+                self.logger.info(f"{k}: {v:.6f}")
+            else:
+                self.logger.info(f"{k}: {v}")
+        
+        self.logger.info("\nRolling Window Statistics:")
+        self.logger.info("\n" + str(window_stats))
+        self.logger.info("="*50)
+
+
 #  >>> DATA PROCESSING <<<  
 # ===========================================================================
 from torch.utils.data import DataLoader, TensorDataset
@@ -774,7 +1048,7 @@ def main(dataset):
     optimizer = torch.optim.Adam(model_v3.parameters(), lr=1e-3, eps=1e-8)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[750, 1050, 1350], gamma=0.1)
 
-    trainer_v3 = Trainer(model_v3, loss_fn, optimizer, train_loader, val_loader, test_loader,
+    trainer_v3 = ExtendedTrainer(model_v3, loss_fn, optimizer, train_loader, val_loader, test_loader,
                     args=args, lr_scheduler=scheduler)
     trainer_v3.train()
     trainer_v3.test()
