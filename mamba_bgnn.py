@@ -865,8 +865,8 @@ def main(dataset):
         'early_stop_patience': 20,
         'grad_norm': False,
         'max_grad_norm': 5.0,
-        'log_dir': f'{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
-        'model_name': f'{dataset}_v3',
+        'log_dir': f'FDSE25_{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
+        'model_name': f'MAMBA_BayesMAGAC_{dataset}',
         'log_step': 20,
         'window_size': 63,
         'step_size': 21
