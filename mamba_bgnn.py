@@ -601,6 +601,104 @@ class Trainer(object):
         rx, ry = Trainer.rank_tensor(x), Trainer.rank_tensor(y)
         return Trainer.pearson(rx, ry)
 
+    @staticmethod
+    def directional_accuracy(y_pred, y_true):
+        """
+        Tính directional accuracy dựa trên hướng của giá trị dự đoán và thực tế.
+        """
+        pred_dir = torch.sign(y_pred)
+        true_dir = torch.sign(y_true)
+        return float((pred_dir == true_dir).float().mean())
+
+    def calculate_portfolio_metrics(self, preds, returns, transaction_cost=0.001):
+        """
+        Tính các chỉ số hiệu suất danh mục đầu tư toàn diện sau khi dự đoán.
+
+        Args:
+            preds: Giá trị dự đoán (tensor)
+            returns: Giá trị thực tế (tensor)
+            transaction_cost: Chi phí giao dịch (mặc định 0.1%)
+
+        Returns:
+            Dictionary chứa: sharpe, max_drawdown, calmar, hit_rate, turnover, profit_factor.
+        """
+        preds_np = preds.cpu().numpy()
+        returns_np = returns.cpu().numpy()
+        # Xác định vị thế giao dịch dựa trên hướng của dự đoán
+        positions = np.sign(preds_np)
+        # Tính turnover dựa trên sự khác biệt giữa các vị thế liên tiếp
+        turnover = np.abs(np.diff(positions, axis=0)).mean()
+        costs = turnover * transaction_cost
+        # Tính lợi nhuận danh mục sau chi phí
+        portfolio_returns = positions[1:] * returns_np[1:] - costs
+        annual_factor = np.sqrt(252)
+        std_ret = portfolio_returns.std()
+        sharpe = portfolio_returns.mean() / std_ret * annual_factor if std_ret != 0 else np.inf
+        cum_returns = np.cumprod(1 + portfolio_returns)
+        peak = np.maximum.accumulate(cum_returns)
+        drawdown = 1 - cum_returns / peak
+        max_drawdown = drawdown.max()
+        calmar = (portfolio_returns.mean() * 252) / max_drawdown if max_drawdown > 0 else np.inf
+        hit_rate = float(np.mean(np.sign(portfolio_returns) == np.sign(returns_np[1:])))
+        profit_factor = float(np.abs(portfolio_returns[portfolio_returns > 0].sum() / 
+                            portfolio_returns[portfolio_returns < 0].sum())) if np.any(portfolio_returns < 0) else np.inf
+        return {
+            'sharpe': sharpe,
+            'max_drawdown': max_drawdown,
+            'calmar': calmar,
+            'hit_rate': hit_rate,
+            'turnover': turnover,
+            'profit_factor': profit_factor
+        }
+
+    def rolling_window_eval(self, data_loader, window_size=63, step_size=21):
+        """
+        Thực hiện đánh giá theo rolling-window (walk-forward evaluation).
+
+        Args:
+            data_loader: DataLoader chứa dữ liệu test.
+            window_size: Kích thước của mỗi cửa sổ đánh giá (mặc định 63, tương đương khoảng 3 tháng giao dịch)
+            step_size: Bước nhảy giữa các cửa sổ (mặc định 10, tương đương khoảng 0.5 tháng giao dịch)
+
+        Returns:
+            Một tuple (df, stats) với df là DataFrame chứa metrics theo từng cửa sổ và stats là thống kê (mean±std) của các metrics.
+        """
+        self.model.eval()
+        windows_metrics = []
+        all_x, all_y = [], []
+        with torch.no_grad():
+            for x, y in data_loader:
+                all_x.append(x)
+                all_y.append(y)
+        X = torch.cat(all_x, 0)
+        Y = torch.cat(all_y, 0)
+        for start_idx in range(0, len(X) - window_size, step_size):
+            end_idx = start_idx + window_size
+            x_window = X[start_idx:end_idx]
+            y_window = Y[start_idx:end_idx].reshape(-1)
+            with torch.no_grad():
+                preds, logvars = self.model(x_window)
+                sigmas = self._to_sigma(logvars)
+            window_rmse = torch.sqrt(torch.mean((y_window - preds)**2)).item()
+            window_mae = torch.mean(torch.abs(y_window - preds)).item()
+            window_ic = self.pearson(y_window, preds).item()
+            window_ric = self.ric(y_window, preds).item()
+            window_dir_acc = self.directional_accuracy(preds, y_window)
+            port_met = self.calculate_portfolio_metrics(preds, y_window)
+            metrics = {
+                'window_start': start_idx,
+                'rmse': window_rmse,
+                'mae': window_mae,
+                'ic': window_ic,
+                'ric': window_ric,
+                'dir_acc': window_dir_acc
+            }
+            metrics.update(port_met)
+            windows_metrics.append(metrics)
+        df = pd.DataFrame(windows_metrics)
+        stats = df.drop(['window_start'], axis=1).agg(['mean', 'std']).round(4)
+        return df, stats
+
     def test(self):
         self.model.eval(); preds, trues, logvars = [], [], []
         nll_total = 0.0
@@ -632,14 +730,23 @@ class Trainer(object):
             f"PICP90:{picp90:.3f}|Gap:{gap90:.3f}  PICP95:{picp95:.3f}|Gap:{gap95:.3f}  "
             f"AURC:{aurc:.5f}"
         )
-        row = { 'nll': nll, 'rmse': rmse, 'mae': mae,
+        metrics = { 'nll': nll, 'rmse': rmse, 'mae': mae,
                'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
                'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
-        self._append_csv(self.test_csv, self.test_header, row)
+        self._append_csv(self.test_csv, self.test_header, metrics)
 
         self._dump_predictions(self.test_pred_csv, preds, sigmas, trues)
 
-        return mae, rmse, ic, ric
+        # Thêm đoạn gọi hàm đánh giá rolling-window và lưu kết quả
+        window_results, window_stats = self.rolling_window_eval(self.test_loader
+                                                                , self.args.get('rolling_window_size', 63)
+                                                                , self.args.get('rolling_step_size', 21))
+        window_results.to_csv(os.path.join(self.args['log_dir'], 'rolling_window_results.csv'))
+        window_stats.to_csv(os.path.join(self.args['log_dir'], 'rolling_window_stats.csv'))
+        self.logger.info("\nRolling Window Evaluation Statistics:")
+        self.logger.info(window_stats)
+
+        return metrics
 
 # -------------- Portfolio & Evaluation Helper Functions --------------
 def calculate_returns_and_positions(prices, predictions, transaction_cost=0.001):
@@ -1014,7 +1121,7 @@ def data_processing(data_path, window, batch_size):
     return features.shape[1], train_loader, val_loader, test_loader
 
 def main(dataset):
-    # >>> TRAIN MAMBA_BayesMAGAC - IXIC <<<  
+    # >>> MAMBA_BayesMAGAC <<<  
     torch.manual_seed(26); np.random.seed(10); random.seed(95)
 
     # hyper‑parameters
@@ -1035,6 +1142,8 @@ def main(dataset):
         'log_dir': f'{dataset}_log' + ' ' + datetime.now().strftime("%Y-%m-%d %H:%M:%S") ,
         'model_name': f'{dataset}_v3',
         'log_step': 20,
+        'window_size': 63,
+        'step_size': 21
     }
     print(f'data_path: {data_path}')
     print(f'Args {args}, N: {N}, L: {window}, batch_size: {batch_size}, Model_Args: {m_args}')
