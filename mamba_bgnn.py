@@ -658,73 +658,86 @@ def make_loader(x, y, batch_size):
                       shuffle=False, drop_last=False)
 
 def data_processing(data_path, window, batch_size):
-    df = pd.read_csv(data_path,
-                     index_col='Date', parse_dates=True) 
+    """
+    Process financial data with proper train/val/test splits and feature normalization
+    
+    Args:
+        data_path: path to CSV file with Date index and price in first column
+        window: lookback window size L
+        batch_size: batch size for dataloaders
+        
+    Returns:
+        num_features: number of features (excluding price)
+        train_loader, val_loader, test_loader: PyTorch dataloaders
+    """
+    # Load and prepare data
+    df = pd.read_csv(data_path, index_col='Date', parse_dates=True) 
     _ = df.pop('Name')
     print(" Data shape:", df.shape)
-    # --- LOW VOLUMNE DROP
-    # vol_thresh = df['Vol.'].quantile(0.01)
-    # df = df[df['Vol.']>vol_thresh]
-    # print(" LOW VOLUMNE DROP - Data shape:", df.shape)
-    # df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    print("NaN distribution:\n",df.isnull().sum())
+    
+    print("NaN distribution:\n", df.isnull().sum())
     df.fillna(df.median(), inplace=True)
     df.dropna(inplace=True)
     print(" FILLNA BY MEDIAN - Data shape:", df.shape)
     
-    raw_np = df.values.astype('float32')   # (T, F) price = col 0
-    # ## --- Tính log-return & winsorize giá (thay khối ret) ---
-    # p_low, p_high = np.percentile(raw_np[:,0], [1,99])
-    # raw_np[:,0]   = np.clip(raw_np[:,0], p_low, p_high)
+    # Split data into price and features
+    raw_np = df.values.astype('float32')
+    prices = raw_np[:, 0]     # Price column
+    features = raw_np[:, 1:]  # Feature columns
+    
     T, Fdim = raw_np.shape
     assert Fdim >= 2, 'Need price + at least 1 feature'
     
-    # ---------- chrono split indices ----------
+    # Calculate initial split lengths
     train_len = int(0.80 * (T - window))
-    val_len   = int(0.05 * (T - window))
+    val_len = int(0.05 * (T - window))
     
-    # prepare training feature matrix for fitting (exclude price col 0)
+    # Prepare and fit scaler on training features only
     train_feat_matrix = []
     for i in range(train_len):
-        train_feat_matrix.append(raw_np[i:i+window, 1:])
-    train_feat_matrix = np.concatenate(train_feat_matrix, axis=0)  # (train_len*L, N)
-    scaler = MinMax01(); 
+        train_feat_matrix.append(features[i:i+window])
+    train_feat_matrix = np.concatenate(train_feat_matrix, axis=0)
+    
+    scaler = MinMax01()
     scaler.fit(train_feat_matrix)
     
-    # ---------- build samples (scaled features) ----------
+    # Build samples with proper temporal alignment
     X_list, Y_list = [], []
     for i in range(T - window):
-        price_prev = raw_np[i+window-1, 0]
-        price_cur  = raw_np[i+window,   0]
-        if price_prev == 0:                 # avoid div‑zero
-            continue
+        # Calculate target return using t and t-1 prices
+        price_prev = prices[i+window-1]  # Price at t-1
+        price_cur = prices[i+window]     # Price at t
         ret = (price_cur - price_prev) / price_prev
-        # ret = math.log(price_cur / price_prev)
-        if not np.isfinite(ret):
-            continue
-        feat_block = scaler.transform(raw_np[i:i+window, 1:])
-        X_list.append(torch.tensor(feat_block, dtype=torch.float32))
-        Y_list.append(torch.tensor([[ret]], dtype=torch.float32))
+        ret = torch.FloatTensor([[ret]])  # Shape: (1,1)
+        
+        # Get feature window from t-window to t-1 (no lookahead)
+        feat_block = scaler.transform(features[i:i+window])
+        feat_block = torch.FloatTensor(feat_block)  # Shape: (L,N)
+        
+        X_list.append(feat_block)
+        Y_list.append(ret)
     
-    XX = torch.stack(X_list)  # (S, L, N)
-    YY = torch.stack(Y_list)  # (S, 1, 1)
+    # Stack all samples
+    XX = torch.stack(X_list)  # Shape: (num_samples, L, N)
+    YY = torch.stack(Y_list)  # Shape: (num_samples, 1, 1)
     
-    # recompute lengths after possible filtering
-    num_samples = XX.shape[0]
+    # Split ensuring no temporal overlap
+    num_samples = len(XX)
     train_len = int(0.80 * num_samples)
-    val_len   = int(0.05 * num_samples)
+    val_len = int(0.05 * num_samples)
+    test_len = num_samples - train_len - val_len
     
-    test_len  = num_samples - train_len - val_len
+    # Create train/val/test splits in chronological order
     X_train, Y_train = XX[:train_len], YY[:train_len]
-    X_val,   Y_val   = XX[train_len:train_len+val_len], YY[train_len:train_len+val_len]
-    X_test,  Y_test  = XX[-test_len:], YY[-test_len:]
+    X_val, Y_val = XX[train_len:train_len+val_len], YY[train_len:train_len+val_len]
+    X_test, Y_test = XX[-test_len:], YY[-test_len:]
     
+    # Create data loaders
     train_loader = make_loader(X_train, Y_train, batch_size)
-    val_loader   = make_loader(X_val,   Y_val, batch_size)
-    test_loader  = make_loader(X_test,  Y_test, batch_size)
-
-    return XX.shape[2], train_loader, val_loader, test_loader
-
+    val_loader = make_loader(X_val, Y_val, batch_size)
+    test_loader = make_loader(X_test, Y_test, batch_size)
+    
+    return features.shape[1], train_loader, val_loader, test_loader
 
 def main(dataset):
     # >>> TRAIN MAMBA_BayesMAGAC - IXIC <<<  
