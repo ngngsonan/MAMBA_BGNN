@@ -336,12 +336,29 @@ class RiskAwareTrainer:
             'picp95': picp95,
             'gap95': gap95,
             'aurc': aurc,
-            'conformal_coverage': coverage,
+            'coverage': coverage,
         }
+        results['conformal_coverage'] = coverage
+
         self.logger.info(
-            "TEST | RMSE: {rmse:.4f} MAE: {mae:.4f} IC: {ic:.4f} RIC: {ric:.4f} "
-            "NLL: {nll:.4f} CRPS: {crps:.4f} Sharp: {sharp:.4f} "
-            "PICP90: {picp90:.3f} Gap90: {gap90:.3f} PICP95: {picp95:.3f} Gap95: {gap95:.3f} "
-            "AURC: {aurc:.4f} ConformalCoverage: {coverage:.3f}".format(**results)
+            "TEST | RMSE: %.4f MAE: %.4f IC: %.4f RIC: %.4f "
+            "NLL: %.4f CRPS: %.4f Sharp: %.4f "
+            "PICP90: %.3f Gap90: %.3f PICP95: %.3f Gap95: %.3f "
+            "AURC: %.4f ConformalCoverage: %.3f"
+            % (
+                results['rmse'],
+                results['mae'],
+                results['ic'],
+                results['ric'],
+                results['nll'],
+                results['crps'],
+                results['sharp'],
+                results['picp90'],
+                results['gap90'],
+                results['picp95'],
+                results['gap95'],
+                results['aurc'],
+                results['coverage'],
+            )
         )
         return results
