@@ -4,15 +4,16 @@ set -euo pipefail
 
 # Default args
 DATASET="DJI"
-MODE="full"  # full|quick|demo
+MODE="full"  # full|quick|demo|icml2026
 ENHANCED=0
 ENV_NAME="py310"
 
 usage() {
-  echo "Usage: bash scripts/setup_and_run.sh [--dataset {DJI|IXIC|NYSE}] [--mode {full|quick|demo}] [--enhanced]" >&2
+  echo "Usage: bash scripts/setup_and_run.sh [--dataset {DJI|IXIC|NYSE}] [--mode {full|quick|demo|icml2026}] [--enhanced]" >&2
   echo "Examples:" >&2
   echo "  bash scripts/setup_and_run.sh --dataset IXIC --mode quick" >&2
   echo "  bash scripts/setup_and_run.sh --mode demo" >&2
+  echo "  bash scripts/setup_and_run.sh --mode icml2026 --dataset NYSE" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -49,6 +50,13 @@ if [[ "$MODE" == "demo" ]]; then
   exit $?
 fi
 
+if [[ "$MODE" == "icml2026" ]]; then
+  CMD=(python run_icml2026_pipeline.py --dataset "$DATASET")
+  echo "> ${CMD[*]}"
+  conda run -n "$ENV_NAME" "${CMD[@]}"
+  exit $?
+fi
+
 CMD=(python run_comprehensive_evaluation.py --dataset "$DATASET")
 if [[ "$MODE" == "quick" ]]; then
   CMD+=('--quick')
@@ -59,4 +67,3 @@ fi
 
 echo "> ${CMD[*]}"
 conda run -n "$ENV_NAME" "${CMD[@]}"
-

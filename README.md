@@ -42,6 +42,7 @@ The model is designed for financial return prediction on stock market indices wi
 - **Early Stopping**: Prevents overfitting with patience-based stopping
 - **Model Checkpointing**: Saves best model based on validation NLL
 - **Detailed Logging**: Training progress and metrics tracking
+- **Regime-Aware Extension**: Optional ICML 2026 pipeline with hierarchical regimes, diffusion graph priors, and conformal calibration
 
 ## Requirements
 
@@ -82,16 +83,36 @@ bash scripts/setup_and_run.sh --dataset DJI --mode quick
 
 Options:
 - `--dataset {DJI|IXIC|NYSE}`: choose dataset (default: `DJI`)
-- `--mode {full|quick|demo}`:
+- `--mode {full|quick|demo|icml2026}`:
   - `demo`: runs the demonstration pipeline (`demo_evaluation.py`), fastest
   - `quick`: runs comprehensive framework with reduced epochs
   - `full`: runs the full comprehensive framework
+  - `icml2026`: launches the new regime-aware training stack (`run_icml2026_pipeline.py`)
 - `--enhanced`: use the enhanced model with directional prediction in the comprehensive framework
 
 What this does:
 - Ensures conda env `py310` exists (creates if missing)
 - Installs CUDA-enabled PyTorch (cu118) + project requirements into `py310`
 - Executes the selected pipeline via `conda run -n py310 ...`
+
+### ICML 2026 Regime-Aware Pipeline
+
+The `feature/icml2026-prep` branch introduces a publication-oriented architecture that stacks a hierarchical latent regime controller on top of the original MAMBA-BGNN. The new system couples three ideas:
+
+1. **Hierarchical Regime Controller** – a Gumbel-Softmax latent hierarchy (global → sector → asset) that gates the bidirectional Mamba state space and provides KL-regularised priors for explainability.
+2. **Diffusion-Driven Graph Prior** – a stochastic refinement of the Bayesian MAGAC adjacency matrices conditioned on regime activations, enabling coarse-to-fine structural discovery without sacrificing computational efficiency.
+3. **Risk-Aware Decoder + Conformal Bands** – a CVaR-inspired decoder trained with a risk-penalised ELBO and post-hoc conformal calibration for distributionally robust uncertainty quantification.
+
+To run the full ICML 2026 pipeline after installing dependencies:
+
+```bash
+conda run -n py310 python run_icml2026_pipeline.py --dataset IXIC --epochs 150 --kl_weight 5e-4 --risk_weight 0.05
+```
+
+Artifacts are saved under `<DATASET>_icml2026_log/` and include validation statistics, calibrated prediction intervals, and conformal coverage diagnostics.
+
+For an architectural deep dive and tuning guidelines, refer to `ICML2026_DESIGN.md`.
+
 
 Manual setup (if preferred):
 ```bash
