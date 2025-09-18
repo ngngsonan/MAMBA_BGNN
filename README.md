@@ -72,18 +72,38 @@ Expected format:
 
 ## Quick Start
 
-### Environment Setup
+### One-Command GPU + Conda Setup
+
+If you have conda and a CUDA-capable GPU installed, run everything with a single command:
+
 ```bash
-# Create conda environment
-conda create -n py310 python=3.10
+bash scripts/setup_and_run.sh --dataset DJI --mode quick
+```
+
+Options:
+- `--dataset {DJI|IXIC|NYSE}`: choose dataset (default: `DJI`)
+- `--mode {full|quick|demo}`:
+  - `demo`: runs the demonstration pipeline (`demo_evaluation.py`), fastest
+  - `quick`: runs comprehensive framework with reduced epochs
+  - `full`: runs the full comprehensive framework
+- `--enhanced`: use the enhanced model with directional prediction in the comprehensive framework
+
+What this does:
+- Ensures conda env `py310` exists (creates if missing)
+- Installs CUDA-enabled PyTorch (cu118) + project requirements into `py310`
+- Executes the selected pipeline via `conda run -n py310 ...`
+
+Manual setup (if preferred):
+```bash
+# Create & activate conda env
+conda create -n py310 python=3.10 -y
 conda activate py310
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Or install manually:
+# Install CUDA wheels first to guarantee GPU build
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-pip install numpy pandas matplotlib einops scipy h5py scikit-learn seaborn
+
+# Install remaining deps
+pip install -r requirements.txt
 ```
 
 ### Comprehensive Evaluation (Recommended)
