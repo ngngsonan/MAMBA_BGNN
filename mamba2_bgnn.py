@@ -372,7 +372,7 @@ def main(dataset='DJI'):
         'early_stop_patience': 25,
         'grad_norm': False,
         'max_grad_norm': 5.0,
-        'log_dir': f'{dataset}_mamba2_log {timestamp}',
+        'log_dir': f'logs/{dataset}_mamba2_log {timestamp}',
         'model_name': f'{dataset}_mamba2_v1',
         'log_step': 20
     }
