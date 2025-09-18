@@ -41,6 +41,7 @@ Objects of interest:
 - `RiskAwareLossConfig`: hyperparameter container for KL and risk weights.
 - `RiskAwareLoss`: returns scalar loss plus logging components for dashboards.
 - `RiskAwareTrainer`: end-to-end training loop with CUDA support, CSV logging, checkpointing, and risk-aware evaluation.
+  The trainer now records validation KL summaries and automatically scales conformal intervals to match the target coverage (can be disabled via `--no_conformal_auto_scale`).
 
 ## 3. Running the Pipeline
 

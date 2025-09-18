@@ -8,6 +8,7 @@ import math
 import os
 from dataclasses import dataclass
 from datetime import datetime
+from statistics import mean
 from typing import Dict, Iterable, Optional, Tuple
 
 import torch
@@ -59,14 +60,30 @@ class RiskAwareLoss(nn.Module):
 class ConformalCalibrator:
     """Simple conformal calibration using absolute residual statistics."""
 
-    def __init__(self, alpha: float = 0.1) -> None:
+    def __init__(self, alpha: float = 0.1, auto_scale: bool = True) -> None:
         self.alpha = alpha
+        self.target = 1.0 - alpha
+        self.auto_scale = auto_scale
         self.quantile: Optional[torch.Tensor] = None
+        self.scale_factor: float = 1.0
+        self.latest_coverage: float = 0.0
 
     def fit(self, mu: torch.Tensor, sigma: torch.Tensor, targets: torch.Tensor) -> None:
-        residual = torch.abs(targets - mu) / sigma.clamp_min(1e-6)
+        sigma_clamped = sigma.clamp_min(1e-6)
+        residual = torch.abs(targets - mu) / sigma_clamped
         quantile = torch.quantile(residual, 1 - self.alpha)
+        coverage = float(((torch.abs(targets - mu) <= quantile * sigma_clamped).float().mean()).item())
+        scale_factor = 1.0
+        if self.auto_scale and coverage > 1e-6:
+            desired = self.target
+            scale_factor = desired / coverage
+            scale_factor = float(torch.clamp(torch.tensor(scale_factor), 0.5, 5.0).item())
+            quantile = quantile * scale_factor
+            coverage = float(((torch.abs(targets - mu) <= quantile * sigma_clamped).float().mean()).item())
+
         self.quantile = quantile.detach()
+        self.scale_factor = scale_factor
+        self.latest_coverage = coverage
 
     def calibrate(self, mu: torch.Tensor, sigma: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.quantile is None:
@@ -98,13 +115,16 @@ class RiskAwareTrainer:
         self.test_loader = test_loader
         self.args = args
         self.lr_scheduler = lr_scheduler
-        self.calibrator = calibrator or ConformalCalibrator(alpha=loss_fn.config.alpha)
+        auto_scale = args.get('conformal_auto_scale', True)
+        self.calibrator = calibrator or ConformalCalibrator(alpha=loss_fn.config.alpha, auto_scale=auto_scale)
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
 
         os.makedirs(self.args['log_dir'], exist_ok=True)
         self.logger = self._get_logger()
+
+        self.val_history = []
 
         self.best_state: Optional[Dict[str, torch.Tensor]] = None
         self.best_loss: float = float('inf')
@@ -117,7 +137,8 @@ class RiskAwareTrainer:
         self._init_csv(self.test_csv, [
             'nll', 'rmse', 'mae', 'ic', 'ric', 'crps', 'sharp',
             'picp90', 'gap90', 'picp95', 'gap95', 'aurc',
-            'c_lower', 'c_upper'
+            'conformal_coverage', 'conformal_target', 'conformal_scale',
+            'conformal_val_coverage'
         ])
 
     # ------------------------------------------------------------------
@@ -263,6 +284,13 @@ class RiskAwareTrainer:
             f"Epoch {epoch} Val Total: {avg_loss:.4f} | NLL: {avg_components['nll']:.4f} | "
             f"KL: {avg_components['kl']:.4f} | Risk: {avg_components['risk']:.4f}"
         )
+        self.val_history.append({
+            'epoch': epoch,
+            'nll': avg_components['nll'],
+            'kl': avg_components['kl'],
+            'risk': avg_components['risk'],
+            'total': avg_loss,
+        })
         bundle = {'mu': mu, 'sigma': sigma, 'targets': targets}
         return avg_loss, bundle
 
@@ -287,6 +315,12 @@ class RiskAwareTrainer:
             self.model.load_state_dict(self.best_state)
         if best_bundle is not None:
             self.calibrator.fit(best_bundle['mu'].cpu(), best_bundle['sigma'].cpu(), best_bundle['targets'].cpu())
+        if self.val_history:
+            kl_values = [entry['kl'] for entry in self.val_history]
+            self.logger.info(
+                "Validation KL | mean: %.4f min: %.4f max: %.4f"
+                % (mean(kl_values), min(kl_values), max(kl_values))
+            )
 
     def test(self) -> Dict[str, float]:
         self.model.eval()
@@ -320,7 +354,9 @@ class RiskAwareTrainer:
         coverage = ((y.cpu() >= conformal_lo) & (y.cpu() <= conformal_hi)).float().mean().item()
 
         row = [nll, rmse.item(), mae.item(), ic.item(), ric.item(), crps.item(), sharp.item(),
-               picp90, gap90, picp95, gap95, aurc, coverage, float(self.calibrator.alpha)]
+               picp90, gap90, picp95, gap95, aurc,
+               coverage, self.calibrator.target, self.calibrator.scale_factor,
+               self.calibrator.latest_coverage]
         self._append_csv(self.test_csv, row)
 
         results = {
@@ -337,6 +373,9 @@ class RiskAwareTrainer:
             'gap95': gap95,
             'aurc': aurc,
             'coverage': coverage,
+            'target_coverage': self.calibrator.target,
+            'calibration_scale': self.calibrator.scale_factor,
+            'val_coverage': self.calibrator.latest_coverage,
         }
         results['conformal_coverage'] = coverage
 
@@ -344,7 +383,7 @@ class RiskAwareTrainer:
             "TEST | RMSE: %.4f MAE: %.4f IC: %.4f RIC: %.4f "
             "NLL: %.4f CRPS: %.4f Sharp: %.4f "
             "PICP90: %.3f Gap90: %.3f PICP95: %.3f Gap95: %.3f "
-            "AURC: %.4f ConformalCoverage: %.3f"
+            "AURC: %.4f ConformalCoverage: %.3f (target %.3f, scale %.2f, val %.3f)"
             % (
                 results['rmse'],
                 results['mae'],
@@ -359,6 +398,9 @@ class RiskAwareTrainer:
                 results['gap95'],
                 results['aurc'],
                 results['coverage'],
+                results['target_coverage'],
+                results['calibration_scale'],
+                results['val_coverage'],
             )
         )
         return results

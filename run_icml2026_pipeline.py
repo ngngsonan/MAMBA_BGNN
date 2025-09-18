@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--mc_train', type=int, default=4)
     parser.add_argument('--mc_eval', type=int, default=16)
     parser.add_argument('--cvar_level', type=float, default=0.9)
+    parser.add_argument('--no_conformal_auto_scale', action='store_true',
+                        help='Disable automatic conformal scaling to hit target coverage')
     return parser.parse_args()
 
 
@@ -65,6 +67,7 @@ def main() -> None:
         'max_grad_norm': 1.0,
         'log_dir': log_dir,
         'model_name': f'{dataset}_ICML2026',
+        'conformal_auto_scale': not args.no_conformal_auto_scale,
     }
 
     config = RiskAwareLossConfig(

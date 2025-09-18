@@ -102,6 +102,7 @@ The `feature/icml2026-prep` branch introduces a publication-oriented architectur
 1. **Hierarchical Regime Controller** – a Gumbel-Softmax latent hierarchy (global → sector → asset) that gates the bidirectional Mamba state space and provides KL-regularised priors for explainability.
 2. **Diffusion-Driven Graph Prior** – a stochastic refinement of the Bayesian MAGAC adjacency matrices conditioned on regime activations, enabling coarse-to-fine structural discovery without sacrificing computational efficiency.
 3. **Risk-Aware Decoder + Conformal Bands** – a CVaR-inspired decoder trained with a risk-penalised ELBO and post-hoc conformal calibration for distributionally robust uncertainty quantification.
+4. **Adaptive Conformal Scaling** – automatically widens prediction intervals to match the requested coverage unless `--no_conformal_auto_scale` is supplied.
 
 To run the full ICML 2026 pipeline after installing dependencies:
 
@@ -109,7 +110,7 @@ To run the full ICML 2026 pipeline after installing dependencies:
 conda run -n py310 python run_icml2026_pipeline.py --dataset IXIC --epochs 150 --kl_weight 5e-4 --risk_weight 0.05
 ```
 
-Artifacts are saved under `<DATASET>_icml2026_log/` and include validation statistics, calibrated prediction intervals, and conformal coverage diagnostics.
+Artifacts are saved under `<DATASET>_icml2026_log/` and include validation statistics, calibrated prediction intervals, and conformal coverage diagnostics (with automatic scaling to hit the target coverage by default).
 
 For an architectural deep dive and tuning guidelines, refer to `ICML2026_DESIGN.md`.
 
