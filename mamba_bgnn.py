@@ -780,6 +780,16 @@ def data_processing(data_path, window, batch_size):
     # Load and prepare data
     df = pd.read_csv(data_path, index_col='Date', parse_dates=True) 
     _ = df.pop('Name')
+
+    # 1. REMOVE HIGHLY LEAKY FEATURES
+    leaky_features = ['mom', 'ROC_5', 'ROC_10', 'ROC_15', 'ROC_20']
+    features_removed = []
+    for feat in leaky_features:
+        if feat in df.columns:
+            df = df.drop(columns=[feat])
+            features_removed.append(feat)
+    print(f"   ❌ Removed {len(features_removed)} highly leaky features: {features_removed}")
+
     print(" Data shape:", df.shape)
     
     print("NaN distribution:\n", df.isnull().sum())
