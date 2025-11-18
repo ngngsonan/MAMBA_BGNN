@@ -453,6 +453,7 @@ def load_data(dataset: str, window: int = 5, batch_size: int = 32):
         num_features, train_loader, val_loader, test_loader
     """
     import pandas as pd
+    import numpy as np
     from torch.utils.data import Dataset, DataLoader
 
     class TimeSeriesDataset(Dataset):
@@ -470,6 +471,16 @@ def load_data(dataset: str, window: int = 5, batch_size: int = 32):
 
     data_path = f'Dataset/combined_dataframe_{dataset}.csv'
     df = pd.read_csv(data_path)
+
+    # Keep only numeric columns
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    df = df[numeric_cols]
+
+    # Handle missing values
+    df = df.fillna(method='ffill').fillna(method='bfill').fillna(0)
+
+    # Convert to float
+    df = df.astype(np.float32)
 
     # Simple split: 70% train, 15% val, 15% test
     n = len(df)
