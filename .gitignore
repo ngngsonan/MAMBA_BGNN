@@ -8,6 +8,8 @@ __pycache__/
 
 # Jupyter Notebook
 sample_run.ipynb
+sample_run*.ipynb
+*sample_run*.ipynb
 .ipynb_checkpoints
 
 # Virtual Environment

@@ -1,7 +1,9 @@
-# @title Import libraries
+# @title Trainer with Multi-Loss Support
 from __future__ import annotations
 import math
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from dataclasses import dataclass
 
 import csv
@@ -15,17 +17,18 @@ from datetime import datetime
 import time
 import copy
 
-import matplotlib.pyplot as plt
-import math
 
-
-# >>> TRAINER - NEW 2 <<<
+# >>> TRAINER - Updated with Multi-Loss Support <<<
 class Trainer(object):
-    """Minimal yet full featured Trainer for MAMBA_BGNN (probabilistic)."""
+    """Minimal yet full featured Trainer for MAMBA_BGNN with multi-loss support."""
 
     # ================= init =================
     def __init__(self, model, loss_fn, optimizer, train_loader, val_loader, test_loader,
-                 args, lr_scheduler=None):
+                 args, lr_scheduler=None, loss_type='bayesian'):
+        """
+        Args:
+            loss_type: 'bayesian', 'mse', or 'smoothl1'
+        """
         self.model = model
         self.loss_fn = loss_fn
         self.opt = optimizer
@@ -34,6 +37,7 @@ class Trainer(object):
         self.test_loader = test_loader
         self.args = args
         self.lr_scheduler = lr_scheduler
+        self.loss_type = loss_type.lower()
 
         os.makedirs(self.args['log_dir'], exist_ok=True)
         self.logger = self._get_logger()
@@ -42,50 +46,28 @@ class Trainer(object):
         self.not_improved = 0
         self.best_path = os.path.join(args.get('log_dir'), 'best_model.pth')
 
+        # Training time tracking
+        self.epoch_times = []
+        self.total_training_time = 0.0
+
         # --- CSV paths & headers (MAIN TABLE) ---
         self.val_csv  = os.path.join(self.args['log_dir'], 'val_metrics.csv')
         self.test_csv = os.path.join(self.args['log_dir'], 'test_metrics.csv')
         self.test_pred_csv = os.path.join(self.args['log_dir'], 'test_predictions.csv')
         self.best_val_pred_csv = os.path.join(self.args['log_dir'], 'val_predictions_best.csv')
 
-        # --- Comprehensive metrics CSV ---
-        self.comprehensive_csv = os.path.join(self.args['log_dir'], 'comprehensive_metrics.csv')
-        self.regime_csv = os.path.join(self.args['log_dir'], 'regime_analysis.csv')
-        self.stress_csv = os.path.join(self.args['log_dir'], 'stress_test.csv')
-
-        self.val_header  = ['epoch','nll','rmse','mae','ic','ric','crps','sharp',
-                            'picp90','gap90','picp95','gap95','aurc']
-        self.test_header = ['nll','rmse','mae','ic','ric','crps','sharp',
-                            'picp90','gap90','picp95','gap95','aurc']
-
-        # Comprehensive header with all financial metrics
-        self.comprehensive_header = [
-            'nll', 'rmse', 'mae', 'ic', 'ric', 'crps', 'sharp',
-            'picp90', 'gap90', 'picp95', 'gap95', 'aurc',
-            'dir_acc', 'sharpe_ratio', 'max_drawdown', 'calmar_ratio',
-            'info_ratio', 'hit_rate', 'tail_ratio',
-            'total_return', 'net_return', 'transaction_costs',
-            'strategy_volatility', 'strategy_max_drawdown'
-        ]
+        # Adaptive headers based on loss type
+        if self.loss_type == 'bayesian':
+            self.val_header  = ['epoch','nll','rmse','mae','ic','ric','crps','sharp',
+                                'picp90','gap90','picp95','gap95','aurc']
+            self.test_header = ['nll','rmse','mae','ic','ric','crps','sharp',
+                                'picp90','gap90','picp95','gap95','aurc']
+        else:
+            self.val_header  = ['epoch','loss','rmse','mae','ic','ric']
+            self.test_header = ['loss','rmse','mae','ic','ric']
 
         self._init_csv(self.val_csv,  self.val_header)
         self._init_csv(self.test_csv, self.test_header)
-        self._init_csv(self.comprehensive_csv, self.comprehensive_header)
-
-    # ================= Dataset & temporal info =================
-    def set_dataset_info(self, dataset_info: dict):
-        """Store dataset temporal information for comprehensive evaluation"""
-        self.dataset_info = dataset_info
-        # Save to JSON
-        import json
-        info_path = os.path.join(self.args['log_dir'], 'dataset_temporal_info.json')
-        with open(info_path, 'w') as f:
-            json.dump(dataset_info, f, indent=2)
-        self.logger.info(f"Dataset temporal info saved to {info_path}")
-        if 'train_period' in dataset_info:
-            self.logger.info(f"Train period: {dataset_info['train_period']}")
-        if 'test_period' in dataset_info:
-            self.logger.info(f"Test period: {dataset_info['test_period']}")
 
     # ================= logging & csv utils =================
     def _get_logger(self):
@@ -172,204 +154,117 @@ class Trainer(object):
             prev = rmse_c
         return auc
 
-    # ================= Advanced Financial Metrics =================
-    @staticmethod
-    def _information_ratio(y_pred: torch.Tensor, y_true: torch.Tensor,
-                          benchmark_returns: torch.Tensor = None) -> float:
-        """Information ratio - active return divided by tracking error"""
-        if benchmark_returns is None:
-            benchmark_returns = torch.zeros_like(y_true)
-        active_returns = y_pred - benchmark_returns
-        tracking_error = torch.std(active_returns)
-        if tracking_error == 0:
-            return 0.0
-        return torch.mean(active_returns).item() / tracking_error.item()
-
-    @staticmethod
-    def _tail_ratio(returns: torch.Tensor, threshold: float = 0.05) -> float:
-        """Tail ratio - ratio of average positive tail to average negative tail"""
-        returns_np = returns.detach().cpu().numpy()
-        upper_threshold = np.percentile(returns_np, (1 - threshold) * 100)
-        lower_threshold = np.percentile(returns_np, threshold * 100)
-        upper_tail = returns_np[returns_np >= upper_threshold]
-        lower_tail = returns_np[returns_np <= lower_threshold]
-        if len(upper_tail) == 0 or len(lower_tail) == 0:
-            return 1.0
-        upper_avg = np.mean(upper_tail)
-        lower_avg = np.mean(lower_tail)
-        if lower_avg >= 0:
-            return float('inf') if upper_avg > 0 else 1.0
-        return abs(upper_avg / lower_avg)
-
-    @staticmethod
-    def _profit_and_loss(y_pred: torch.Tensor, y_true: torch.Tensor,
-                        transaction_cost: float = 0.001) -> dict:
-        """Simulated P&L from trading strategy based on predictions"""
-        positions = torch.sign(y_pred).detach().cpu().numpy()
-        returns = y_true.detach().cpu().numpy()
-        strategy_returns = positions * returns
-        position_changes = np.abs(np.diff(np.concatenate([[0], positions])))
-        total_costs = np.sum(position_changes) * transaction_cost
-        cumulative_returns = np.cumprod(1 + strategy_returns) - 1
-        total_return = cumulative_returns[-1] if len(cumulative_returns) > 0 else 0
-        net_return = total_return - total_costs
-
-        # Calculate max drawdown for strategy
-        cumulative = np.cumprod(1 + strategy_returns)
-        running_max = np.maximum.accumulate(cumulative)
-        drawdown = (cumulative - running_max) / running_max
-        strategy_max_dd = float(np.min(drawdown))
-
-        return {
-            'total_return': float(total_return),
-            'net_return': float(net_return),
-            'transaction_costs': float(total_costs),
-            'strategy_volatility': float(np.std(strategy_returns)) if len(strategy_returns) > 0 else 0.0,
-            'strategy_max_drawdown': strategy_max_dd
-        }
-
-    # ================= Market Regime Analysis =================
-    @staticmethod
-    def _classify_market_regime(returns: torch.Tensor, window: int = 20) -> torch.Tensor:
-        """
-        Classify market regime based on rolling volatility
-        0: Low volatility (stable), 1: High volatility (volatile)
-        """
-        returns_np = returns.detach().cpu().numpy()
-        rolling_vol = pd.Series(returns_np).rolling(window=window, min_periods=window//2).std()
-        vol_median = rolling_vol.median()
-        regime = (rolling_vol > vol_median).astype(int).values
-        return torch.tensor(regime, dtype=torch.int, device=returns.device)
-
-    @staticmethod
-    def _regime_performance_analysis(y_pred: torch.Tensor, y_true: torch.Tensor,
-                                     regimes: torch.Tensor) -> dict:
-        """Analyze performance metrics across different market regimes"""
-        results = {}
-        for regime_id in [0, 1]:  # 0: stable, 1: volatile
-            regime_name = "stable" if regime_id == 0 else "volatile"
-            mask = (regimes == regime_id)
-            if mask.sum() == 0:
-                continue
-            pred_regime = y_pred[mask]
-            true_regime = y_true[mask]
-
-            results[f'regime_{regime_name}_samples'] = int(mask.sum().item())
-            results[f'regime_{regime_name}_rmse'] = float(torch.sqrt(torch.mean((pred_regime - true_regime)**2)))
-            results[f'regime_{regime_name}_mae'] = float(torch.mean(torch.abs(pred_regime - true_regime)))
-            results[f'regime_{regime_name}_dir_acc'] = float(Trainer.directional_accuracy(pred_regime, true_regime))
-
-            if len(pred_regime) > 1:
-                corr_matrix = torch.corrcoef(torch.stack([pred_regime, true_regime]))
-                results[f'regime_{regime_name}_correlation'] = float(corr_matrix[0, 1])
-            else:
-                results[f'regime_{regime_name}_correlation'] = 0.0
-        return results
-
-    @staticmethod
-    def _market_stress_test(y_pred: torch.Tensor, y_true: torch.Tensor,
-                           stress_percentile: float = 5.0) -> dict:
-        """Test model performance during market stress periods (extreme negative returns)"""
-        returns_np = y_true.detach().cpu().numpy()
-        stress_threshold = np.percentile(returns_np, stress_percentile)
-        stress_mask = y_true <= stress_threshold
-
-        if stress_mask.sum() == 0:
-            return {'stress_samples': 0}
-
-        pred_stress = y_pred[stress_mask]
-        true_stress = y_true[stress_mask]
-
-        results = {
-            'stress_samples': int(stress_mask.sum().item()),
-            'stress_rmse': float(torch.sqrt(torch.mean((pred_stress - true_stress)**2))),
-            'stress_mae': float(torch.mean(torch.abs(pred_stress - true_stress))),
-            'stress_dir_acc': float(Trainer.directional_accuracy(pred_stress, true_stress)),
-            'stress_avg_return': float(torch.mean(true_stress))
-        }
-
-        if len(pred_stress) > 1:
-            corr_matrix = torch.corrcoef(torch.stack([pred_stress, true_stress]))
-            results['stress_correlation'] = float(corr_matrix[0, 1])
-        else:
-            results['stress_correlation'] = 0.0
-
-        return results
-
     # ================= training loops =================
     def _run_epoch(self, epoch):
+        epoch_start_time = time.time()
         self.model.train(); total = 0.0
         for step, (x, y) in enumerate(self.train_loader):
             self.opt.zero_grad()
-            mu, log_var = self.model(x)                               # (B,), (B,)
-            loss = self.loss_fn(mu, y.squeeze(), log_var.exp())       # NLL
+
+            if self.loss_type == 'bayesian':
+                mu, log_var = self.model(x)                           # (B,), (B,)
+                loss = self.loss_fn(mu, y.squeeze(), log_var.exp())   # NLL
+                loss_name = 'NLL'
+            else:
+                mu, _ = self.model(x)                                 # (B,), ignore log_var
+                loss = self.loss_fn(mu, y.squeeze())                  # MSE or SmoothL1
+                loss_name = 'MSE' if self.loss_type == 'mse' else 'SmoothL1'
+
             loss.backward()
             if self.args['grad_norm']:
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.args['max_grad_norm'])
             self.opt.step()
             total += loss.item()
             if step % self.args['log_step'] == 0:
-                self.logger.info(f"Epoch {epoch} [{step}/{len(self.train_loader)}] Loss(NLL): {loss.item():.6f}")
+                self.logger.info(f"Epoch {epoch} [{step}/{len(self.train_loader)}] Loss({loss_name}): {loss.item():.6f}")
         if self.lr_scheduler: self.lr_scheduler.step()
         train_loss = total / len(self.train_loader)
-        self.logger.info(f"Epoch {epoch} Train NLL: {train_loss:.6f}")
+        epoch_time = time.time() - epoch_start_time
+        self.epoch_times.append(epoch_time)
+        self.logger.info(f"Epoch {epoch} Train {loss_name}: {train_loss:.6f} (Time: {epoch_time:.2f}s)")
         return train_loss
 
     def _validate(self, epoch):
         self.model.eval(); total = 0.0
-        preds, trues, logvars = [], [], []
-        with torch.no_grad():
-            for x, y in self.val_loader:
-                mu, log_var = self.model(x)
-                total += self.loss_fn(mu, y.squeeze(), log_var.exp()).item()
-                preds.append(mu); trues.append(y.squeeze()); logvars.append(log_var.squeeze())
-        nll = total / len(self.val_loader)
+        preds, trues = [], []
 
-        preds   = torch.cat(preds, 0).squeeze(-1)
-        trues   = torch.cat(trues, 0).squeeze(-1)
-        logvars = torch.cat(logvars, 0).squeeze(-1)
-        sigmas  = self._to_sigma(logvars)
+        if self.loss_type == 'bayesian':
+            logvars = []
+            with torch.no_grad():
+                for x, y in self.val_loader:
+                    mu, log_var = self.model(x)
+                    total += self.loss_fn(mu, y.squeeze(), log_var.exp()).item()
+                    preds.append(mu); trues.append(y.squeeze()); logvars.append(log_var.squeeze())
 
-        # ---- MAIN metrics ----
-        rmse = torch.sqrt(torch.mean((trues - preds)**2))
-        mae  = torch.mean(torch.abs(trues - preds))
-        ic   = self.pearson(trues, preds)
-        ric  = self.ric(trues, preds)
-        crps = self._crps_gaussian(preds, sigmas, trues).mean()
-        sharp = sigmas.mean()
-        picp90, gap90 = self._picp_and_gap(preds, sigmas, trues, q=0.90)
-        picp95, gap95 = self._picp_and_gap(preds, sigmas, trues, q=0.95)
-        aurc = self._aurc_rmse(trues, preds, sigmas, points=10)
+            preds   = torch.cat(preds, 0).squeeze(-1)
+            trues   = torch.cat(trues, 0).squeeze(-1)
+            logvars = torch.cat(logvars, 0).squeeze(-1)
+            sigmas  = self._to_sigma(logvars)
 
-        self.logger.info(
-            f"VAL  RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  "
-            f"NLL:{nll:.5f}  CRPS:{crps:.5f}  Sharp(σ):{sharp:.5f}  "
-            f"PICP90:{picp90:.3f}|Gap:{gap90:.3f}  PICP95:{picp95:.3f}|Gap:{gap95:.3f}  "
-            f"AURC:{aurc:.5f}"
-        )
+            nll = total / len(self.val_loader)
+            rmse = torch.sqrt(torch.mean((trues - preds)**2))
+            mae  = torch.mean(torch.abs(trues - preds))
+            ic   = self.pearson(trues, preds)
+            ric  = self.ric(trues, preds)
+            crps = self._crps_gaussian(preds, sigmas, trues).mean()
+            sharp = sigmas.mean()
+            picp90, gap90 = self._picp_and_gap(preds, sigmas, trues, q=0.90)
+            picp95, gap95 = self._picp_and_gap(preds, sigmas, trues, q=0.95)
+            aurc = self._aurc_rmse(trues, preds, sigmas, points=10)
 
-        # write CSV row
-        # row = {'epoch': int(epoch), 'nll': nll.item(), 'rmse': rmse.item(), 'mae': mae.item(),
-        #        'ic': ic.item(), 'ric': ric.item(), 'crps': crps.item(), 'sharp': sharp.item(),
-        #        'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
-        row = {'epoch': int(epoch), 'nll': nll, 'rmse': rmse, 'mae': mae,
-               'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
-               'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
-        self._append_csv(self.val_csv, self.val_header, row)
+            self.logger.info(
+                f"VAL  RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  "
+                f"NLL:{nll:.5f}  CRPS:{crps:.5f}  Sharp(σ):{sharp:.5f}  "
+                f"PICP90:{picp90:.3f}|Gap:{gap90:.3f}  PICP95:{picp95:.3f}|Gap:{gap95:.3f}  "
+                f"AURC:{aurc:.5f}"
+            )
 
-        # return bundle to dump best-val predictions later
-        return nll, (preds, sigmas, trues)
+            row = {'epoch': int(epoch), 'nll': nll, 'rmse': rmse, 'mae': mae,
+                   'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
+                   'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
+            self._append_csv(self.val_csv, self.val_header, row)
+
+            return nll, (preds, sigmas, trues)
+
+        else:
+            # Deterministic case (MSE or SmoothL1)
+            with torch.no_grad():
+                for x, y in self.val_loader:
+                    mu, _ = self.model(x)  # ignore log_var
+                    total += self.loss_fn(mu, y.squeeze()).item()
+                    preds.append(mu); trues.append(y.squeeze())
+
+            preds = torch.cat(preds, 0).squeeze(-1)
+            trues = torch.cat(trues, 0).squeeze(-1)
+
+            loss = total / len(self.val_loader)
+            rmse = torch.sqrt(torch.mean((trues - preds)**2))
+            mae  = torch.mean(torch.abs(trues - preds))
+            ic   = self.pearson(trues, preds)
+            ric  = self.ric(trues, preds)
+
+            loss_name = 'MSE' if self.loss_type == 'mse' else 'SmoothL1'
+            self.logger.info(
+                f"VAL  RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  {loss_name}:{loss:.5f}"
+            )
+
+            row = {'epoch': int(epoch), 'loss': loss, 'rmse': rmse, 'mae': mae, 'ic': ic, 'ric': ric}
+            self._append_csv(self.val_csv, self.val_header, row)
+
+            return loss, (preds, None, trues)
 
     def train(self):
+        training_start_time = time.time()
         best_bundle = None
+        metric_name = 'NLL' if self.loss_type == 'bayesian' else ('MSE' if self.loss_type == 'mse' else 'SmoothL1')
         for epoch in range(1, self.args['epochs'] + 1):
             _ = self._run_epoch(epoch)
-            nll, bundle = self._validate(epoch)
-            if nll < self.best_loss:
-                self.best_loss = nll
+            val_loss, bundle = self._validate(epoch)
+            if val_loss < self.best_loss:
+                self.best_loss = val_loss
                 self.best_state = copy.deepcopy(self.model.state_dict())
                 self.not_improved = 0
-                self.logger.info('--- New best model (by VAL NLL) ---')
+                self.logger.info(f'--- New best model (by VAL {metric_name}) ---')
                 torch.save(self.best_state, self.best_path)
                 best_bundle = bundle
             else:
@@ -377,11 +272,24 @@ class Trainer(object):
             if self.args['early_stop'] and self.not_improved >= self.args['early_stop_patience']:
                 self.logger.info('Early stopping triggered.')
                 break
+
+        self.total_training_time = time.time() - training_start_time
+        avg_epoch_time = np.mean(self.epoch_times) if self.epoch_times else 0.0
+        self.logger.info(f"Training completed in {self.total_training_time:.2f}s (Avg: {avg_epoch_time:.2f}s/epoch)")
+
         if self.best_state is not None:
             self.model.load_state_dict(self.best_state)
         if best_bundle is not None:
             mu_b, sigma_b, y_b = best_bundle
-            self._dump_predictions(self.best_val_pred_csv, mu_b, sigma_b, y_b)
+            if sigma_b is not None:
+                self._dump_predictions(self.best_val_pred_csv, mu_b, sigma_b, y_b)
+            else:
+                # Deterministic case: save without sigma
+                df = pd.DataFrame({
+                    'y': y_b.detach().cpu().numpy().astype(float),
+                    'mu': mu_b.detach().cpu().numpy().astype(float),
+                })
+                df.to_csv(self.best_val_pred_csv, index=False)
 
     # ================ metrics & test ================
     @staticmethod
@@ -441,7 +349,7 @@ class Trainer(object):
         max_drawdown = drawdown.max()
         calmar = (portfolio_returns.mean() * 252) / max_drawdown if max_drawdown > 0 else np.inf
         hit_rate = float(np.mean(np.sign(portfolio_returns) == np.sign(returns_np[1:])))
-        profit_factor = float(np.abs(portfolio_returns[portfolio_returns > 0].sum() / 
+        profit_factor = float(np.abs(portfolio_returns[portfolio_returns > 0].sum() /
                             portfolio_returns[portfolio_returns < 0].sum())) if np.any(portfolio_returns < 0) else np.inf
         return {
             'sharpe': sharpe,
@@ -478,8 +386,7 @@ class Trainer(object):
             x_window = X[start_idx:end_idx]
             y_window = Y[start_idx:end_idx].reshape(-1)
             with torch.no_grad():
-                preds, logvars = self.model(x_window)
-                sigmas = self._to_sigma(logvars)
+                preds, _ = self.model(x_window)  # ignore log_var for rolling window eval
             window_rmse = torch.sqrt(torch.mean((y_window - preds)**2)).item()
             window_mae = torch.mean(torch.abs(y_window - preds)).item()
             window_ic = self.pearson(y_window, preds).item()
@@ -501,176 +408,233 @@ class Trainer(object):
         return df, stats
 
     def test(self):
-        self.model.eval(); preds, trues, logvars = [], [], []
-        nll_total = 0.0
-        with torch.no_grad():
-            for x, y in self.test_loader:
-                mu, log_var = self.model(x)
-                nll_total += self.loss_fn(mu, y.squeeze(), log_var.exp()).item()
-                preds.append(mu); trues.append(y.squeeze()); logvars.append(log_var.squeeze())
+        self.model.eval()
+        preds, trues = [], []
 
-        preds   = torch.cat(preds, 0).squeeze(-1)
-        trues   = torch.cat(trues, 0).squeeze(-1)
-        logvars = torch.cat(logvars, 0).squeeze(-1)
-        sigmas  = self._to_sigma(logvars)
-        nll = nll_total / max(1, len(self.test_loader))
+        if self.loss_type == 'bayesian':
+            logvars = []
+            loss_total = 0.0
+            with torch.no_grad():
+                for x, y in self.test_loader:
+                    mu, log_var = self.model(x)
+                    loss_total += self.loss_fn(mu, y.squeeze(), log_var.exp()).item()
+                    preds.append(mu); trues.append(y.squeeze()); logvars.append(log_var.squeeze())
 
-        # ---- Basic & Probabilistic metrics ----
-        rmse = torch.sqrt(torch.mean((trues - preds)**2))
-        mae  = torch.mean(torch.abs(trues - preds))
-        ic   = self.pearson(trues, preds)
-        ric  = self.ric(trues, preds)
-        crps = self._crps_gaussian(preds, sigmas, trues).mean()
-        sharp = sigmas.mean()
-        picp90, gap90 = self._picp_and_gap(preds, sigmas, trues, q=0.90)
-        picp95, gap95 = self._picp_and_gap(preds, sigmas, trues, q=0.95)
-        aurc = self._aurc_rmse(trues, preds, sigmas, points=10)
+            preds   = torch.cat(preds, 0).squeeze(-1)
+            trues   = torch.cat(trues, 0).squeeze(-1)
+            logvars = torch.cat(logvars, 0).squeeze(-1)
+            sigmas  = self._to_sigma(logvars)
+            nll = loss_total / max(1, len(self.test_loader))
 
-        # ---- Financial metrics ----
-        dir_acc = self.directional_accuracy(preds, trues)
-        port_metrics = self.calculate_portfolio_metrics(preds, trues, transaction_cost=0.001)
-        sharpe_ratio = port_metrics['sharpe']
-        max_drawdown = port_metrics['max_drawdown']
-        calmar = port_metrics['calmar']
-        hit_rate = port_metrics['hit_rate']
+            rmse = torch.sqrt(torch.mean((trues - preds)**2))
+            mae  = torch.mean(torch.abs(trues - preds))
+            ic   = self.pearson(trues, preds)
+            ric  = self.ric(trues, preds)
+            crps = self._crps_gaussian(preds, sigmas, trues).mean()
+            sharp = sigmas.mean()
+            picp90, gap90 = self._picp_and_gap(preds, sigmas, trues, q=0.90)
+            picp95, gap95 = self._picp_and_gap(preds, sigmas, trues, q=0.95)
+            aurc = self._aurc_rmse(trues, preds, sigmas, points=10)
 
-        # ---- Advanced Financial metrics ----
-        info_ratio = self._information_ratio(preds, trues)
-        tail_ratio = self._tail_ratio(preds)
-        pnl_results = self._profit_and_loss(preds, trues, transaction_cost=0.001)
+            self.logger.info(
+                f"TEST RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  "
+                f"NLL:{nll:.5f}  CRPS:{crps:.5f}  Sharp(σ):{sharp:.5f}  "
+                f"PICP90:{picp90:.3f}|Gap:{gap90:.3f}  PICP95:{picp95:.3f}|Gap:{gap95:.3f}  "
+                f"AURC:{aurc:.5f}"
+            )
+            metrics = { 'nll': nll, 'rmse': rmse, 'mae': mae,
+                   'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
+                   'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc}
+            self._append_csv(self.test_csv, self.test_header, metrics)
 
-        # ---- Market Regime Analysis ----
-        regimes = self._classify_market_regime(trues, window=20)
-        regime_analysis = self._regime_performance_analysis(preds, trues, regimes)
+            self._dump_predictions(self.test_pred_csv, preds, sigmas, trues)
 
-        # ---- Stress Test ----
-        stress_results = self._market_stress_test(preds, trues, stress_percentile=5.0)
+        else:
+            # Deterministic case (MSE or SmoothL1)
+            loss_total = 0.0
+            with torch.no_grad():
+                for x, y in self.test_loader:
+                    mu, _ = self.model(x)  # ignore log_var
+                    loss_total += self.loss_fn(mu, y.squeeze()).item()
+                    preds.append(mu); trues.append(y.squeeze())
 
-        # ---- Log results ----
-        self.logger.info("="*80)
-        self.logger.info("COMPREHENSIVE TEST RESULTS")
-        self.logger.info("="*80)
-        self.logger.info(
-            f"Probabilistic: RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  "
-            f"NLL:{nll:.5f}  CRPS:{crps:.5f}  Sharp(σ):{sharp:.5f}  "
-            f"PICP90:{picp90:.3f}|Gap:{gap90:.3f}  PICP95:{picp95:.3f}|Gap:{gap95:.3f}  "
-            f"AURC:{aurc:.5f}"
-        )
-        self.logger.info(
-            f"Financial:     DirAcc:{dir_acc:.4f}  Sharpe:{sharpe_ratio:.4f}  "
-            f"MaxDD:{max_drawdown:.4f}  Calmar:{calmar:.4f}  HitRate:{hit_rate:.4f}  "
-            f"InfoRatio:{info_ratio:.4f}  TailRatio:{tail_ratio:.4f}"
-        )
-        self.logger.info(
-            f"P&L:           TotalReturn:{pnl_results['total_return']:.4f}  "
-            f"NetReturn:{pnl_results['net_return']:.4f}  TxnCost:{pnl_results['transaction_costs']:.4f}  "
-            f"StratVol:{pnl_results['strategy_volatility']:.4f}  StratMaxDD:{pnl_results['strategy_max_drawdown']:.4f}"
-        )
+            preds = torch.cat(preds, 0).squeeze(-1)
+            trues = torch.cat(trues, 0).squeeze(-1)
+            loss = loss_total / max(1, len(self.test_loader))
 
-        # Log regime analysis
-        self.logger.info("\nMarket Regime Analysis:")
-        for key, value in regime_analysis.items():
-            if 'samples' in key:
-                self.logger.info(f"  {key}: {value}")
-            else:
-                self.logger.info(f"  {key}: {value:.4f}")
+            rmse = torch.sqrt(torch.mean((trues - preds)**2))
+            mae  = torch.mean(torch.abs(trues - preds))
+            ic   = self.pearson(trues, preds)
+            ric  = self.ric(trues, preds)
 
-        # Log stress test
-        self.logger.info("\nMarket Stress Test (Bottom 5%):")
-        for key, value in stress_results.items():
-            if 'samples' in key:
-                self.logger.info(f"  {key}: {value}")
-            else:
-                self.logger.info(f"  {key}: {value:.4f}")
+            loss_name = 'MSE' if self.loss_type == 'mse' else 'SmoothL1'
+            self.logger.info(
+                f"TEST RMSE:{rmse:.4f}  MAE:{mae:.4f}  IC:{ic:.4f}  RIC:{ric:.4f}  {loss_name}:{loss:.5f}"
+            )
+            metrics = {'loss': loss, 'rmse': rmse, 'mae': mae, 'ic': ic, 'ric': ric}
+            self._append_csv(self.test_csv, self.test_header, metrics)
 
-        # ---- Compile all metrics ----
-        metrics = {
-            'nll': nll, 'rmse': rmse, 'mae': mae,
-            'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
-            'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc
-        }
+            # Save predictions without sigma
+            df = pd.DataFrame({
+                'y': trues.detach().cpu().numpy().astype(float),
+                'mu': preds.detach().cpu().numpy().astype(float),
+            })
+            df.to_csv(self.test_pred_csv, index=False)
 
-        comprehensive_metrics = {
-            'nll': nll, 'rmse': rmse, 'mae': mae,
-            'ic': ic, 'ric': ric, 'crps': crps, 'sharp': sharp,
-            'picp90': picp90, 'gap90': gap90, 'picp95': picp95, 'gap95': gap95, 'aurc': aurc,
-            'dir_acc': dir_acc, 'sharpe_ratio': sharpe_ratio, 'max_drawdown': max_drawdown,
-            'calmar_ratio': calmar, 'info_ratio': info_ratio, 'hit_rate': hit_rate,
-            'tail_ratio': tail_ratio,
-            'total_return': pnl_results['total_return'],
-            'net_return': pnl_results['net_return'],
-            'transaction_costs': pnl_results['transaction_costs'],
-            'strategy_volatility': pnl_results['strategy_volatility'],
-            'strategy_max_drawdown': pnl_results['strategy_max_drawdown']
-        }
-
-        # ---- Save to CSVs ----
-        self._append_csv(self.test_csv, self.test_header, metrics)
-        self._append_csv(self.comprehensive_csv, self.comprehensive_header, comprehensive_metrics)
-
-        # Save regime analysis
-        regime_df = pd.DataFrame([regime_analysis])
-        regime_df.to_csv(self.regime_csv, index=False)
-
-        # Save stress test
-        stress_df = pd.DataFrame([stress_results])
-        stress_df.to_csv(self.stress_csv, index=False)
-
-        # Save predictions
-        self._dump_predictions(self.test_pred_csv, preds, sigmas, trues)
-
-        # ---- Rolling window evaluation ----
-        window_results, window_stats = self.rolling_window_eval(
-            self.test_loader,
-            self.args.get('rolling_window_size', 63),
-            self.args.get('rolling_step_size', 21)
-        )
-        window_results.to_csv(os.path.join(self.args['log_dir'], 'rolling_window_results.csv'), index=False)
+        # Thêm đoạn gọi hàm đánh giá rolling-window và lưu kết quả
+        window_results, window_stats = self.rolling_window_eval(self.test_loader
+                                                                , self.args.get('rolling_window_size', 63)
+                                                                , self.args.get('rolling_step_size', 21))
+        window_results.to_csv(os.path.join(self.args['log_dir'], 'rolling_window_results.csv'))
         window_stats.to_csv(os.path.join(self.args['log_dir'], 'rolling_window_stats.csv'))
         self.logger.info("\nRolling Window Evaluation Statistics:")
         self.logger.info(window_stats)
 
-        # ---- Save evaluation summary ----
-        summary_path = os.path.join(self.args['log_dir'], 'evaluation_summary.txt')
-        with open(summary_path, 'w') as f:
-            f.write(f"COMPREHENSIVE EVALUATION SUMMARY\n")
-            f.write(f"{'='*80}\n\n")
+        # Generate summary report automatically
+        self.generate_summary_report()
 
-            f.write("PROBABILISTIC METRICS:\n")
-            f.write(f"  NLL:      {comprehensive_metrics['nll']:.6f}\n")
-            f.write(f"  RMSE:     {comprehensive_metrics['rmse']:.6f}\n")
-            f.write(f"  MAE:      {comprehensive_metrics['mae']:.6f}\n")
-            f.write(f"  IC:       {comprehensive_metrics['ic']:.6f}\n")
-            f.write(f"  RIC:      {comprehensive_metrics['ric']:.6f}\n")
-            f.write(f"  CRPS:     {comprehensive_metrics['crps']:.6f}\n")
-            f.write(f"  AURC:     {comprehensive_metrics['aurc']:.6f}\n\n")
+        return metrics
 
-            f.write("FINANCIAL METRICS:\n")
-            f.write(f"  Directional Accuracy: {comprehensive_metrics['dir_acc']:.4f}\n")
-            f.write(f"  Sharpe Ratio:         {comprehensive_metrics['sharpe_ratio']:.4f}\n")
-            f.write(f"  Max Drawdown:         {comprehensive_metrics['max_drawdown']:.4f}\n")
-            f.write(f"  Calmar Ratio:         {comprehensive_metrics['calmar_ratio']:.4f}\n")
-            f.write(f"  Information Ratio:    {comprehensive_metrics['info_ratio']:.4f}\n")
-            f.write(f"  Hit Rate:             {comprehensive_metrics['hit_rate']:.4f}\n")
-            f.write(f"  Tail Ratio:           {comprehensive_metrics['tail_ratio']:.4f}\n\n")
+    # ================ summary report generation =================
+    def generate_summary_report(self):
+        """
+        Generate a comprehensive summary report similar to baseline_notebook.py
+        Reads test metrics and creates a formatted summary with training time info
+        """
+        summary_txt = os.path.join(self.args['log_dir'], 'training_summary.txt')
 
-            f.write("P&L ANALYSIS:\n")
-            f.write(f"  Total Return:         {comprehensive_metrics['total_return']:.4f}\n")
-            f.write(f"  Net Return:           {comprehensive_metrics['net_return']:.4f}\n")
-            f.write(f"  Transaction Costs:    {comprehensive_metrics['transaction_costs']:.6f}\n")
-            f.write(f"  Strategy Volatility:  {comprehensive_metrics['strategy_volatility']:.6f}\n")
-            f.write(f"  Strategy Max DD:      {comprehensive_metrics['strategy_max_drawdown']:.4f}\n\n")
+        # Read test metrics
+        if os.path.exists(self.test_csv):
+            test_df = pd.read_csv(self.test_csv)
+            if len(test_df) > 0:
+                test_metrics = test_df.iloc[-1].to_dict()  # Get last row (latest test results)
+            else:
+                self.logger.warning("No test metrics found")
+                return
+        else:
+            self.logger.warning(f"Test CSV not found: {self.test_csv}")
+            return
 
-            f.write("MARKET REGIME ANALYSIS:\n")
-            for key, value in regime_analysis.items():
-                f.write(f"  {key}: {value}\n")
+        # Read validation metrics for best epoch info
+        best_epoch = 1
+        if os.path.exists(self.val_csv):
+            val_df = pd.read_csv(self.val_csv)
+            if len(val_df) > 0:
+                loss_col = 'nll' if self.loss_type == 'bayesian' else 'loss'
+                best_epoch = val_df[loss_col].idxmin() + 1
+
+        # Calculate time statistics
+        avg_epoch_time = np.mean(self.epoch_times) if self.epoch_times else 0.0
+        total_epochs = len(self.epoch_times)
+
+        # Create summary report
+        with open(summary_txt, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("TRAINING SUMMARY REPORT\n")
+            f.write("="*80 + "\n")
+            f.write(f"Model: {self.args.get('model_name', 'MAMBA_BGNN')}\n")
+            f.write(f"Dataset: {self.args.get('dataset', 'N/A')}\n")
+            f.write(f"Loss Type: {self.loss_type.upper()}\n")
+            f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Log Directory: {self.args['log_dir']}\n")
+            f.write("="*80 + "\n\n")
+
+            # Training configuration
+            f.write("TRAINING CONFIGURATION:\n")
+            f.write("-"*80 + "\n")
+            f.write(f"Total Epochs: {total_epochs}\n")
+            f.write(f"Best Epoch: {best_epoch}\n")
+            f.write(f"Early Stop: {self.args.get('early_stop', False)}\n")
+            if self.args.get('early_stop'):
+                f.write(f"Early Stop Patience: {self.args.get('early_stop_patience', 'N/A')}\n")
+            f.write(f"Batch Size: {self.args.get('batch_size', 'N/A')}\n")
+            f.write(f"Learning Rate: {self.args.get('lr', 'N/A')}\n")
             f.write("\n")
 
-            f.write("STRESS TEST RESULTS:\n")
-            for key, value in stress_results.items():
-                f.write(f"  {key}: {value}\n")
+            # Training time summary
+            f.write("TRAINING TIME:\n")
+            f.write("-"*80 + "\n")
+            f.write(f"Total Training Time: {self.total_training_time:.2f}s ({self.total_training_time/60:.2f} min)\n")
+            f.write(f"Average Epoch Time: {avg_epoch_time:.2f}s/epoch\n")
+            if self.epoch_times:
+                f.write(f"Min Epoch Time: {np.min(self.epoch_times):.2f}s\n")
+                f.write(f"Max Epoch Time: {np.max(self.epoch_times):.2f}s\n")
+            f.write("\n")
 
-        self.logger.info(f"Evaluation summary saved to: {summary_path}")
-        self.logger.info("="*80)
+            # Test metrics
+            f.write("TEST METRICS:\n")
+            f.write("-"*80 + "\n")
 
-        return comprehensive_metrics
+            if self.loss_type == 'bayesian':
+                f.write(f"NLL:                {test_metrics.get('nll', 0):.6f}\n")
+                f.write(f"RMSE:               {test_metrics.get('rmse', 0):.6f}\n")
+                f.write(f"MAE:                {test_metrics.get('mae', 0):.6f}\n")
+                f.write(f"IC:                 {test_metrics.get('ic', 0):.6f}\n")
+                f.write(f"RIC:                {test_metrics.get('ric', 0):.6f}\n")
+                f.write(f"CRPS:               {test_metrics.get('crps', 0):.6f}\n")
+                f.write(f"Sharpness (σ):      {test_metrics.get('sharp', 0):.6f}\n")
+                f.write(f"PICP 90%:           {test_metrics.get('picp90', 0):.4f}\n")
+                f.write(f"Gap 90%:            {test_metrics.get('gap90', 0):.4f}\n")
+                f.write(f"PICP 95%:           {test_metrics.get('picp95', 0):.4f}\n")
+                f.write(f"Gap 95%:            {test_metrics.get('gap95', 0):.4f}\n")
+                f.write(f"AURC (RMSE):        {test_metrics.get('aurc', 0):.6f}\n")
+            else:
+                loss_name = 'MSE' if self.loss_type == 'mse' else 'SmoothL1'
+                f.write(f"{loss_name}:         {test_metrics.get('loss', 0):.6f}\n")
+                f.write(f"RMSE:               {test_metrics.get('rmse', 0):.6f}\n")
+                f.write(f"MAE:                {test_metrics.get('mae', 0):.6f}\n")
+                f.write(f"IC:                 {test_metrics.get('ic', 0):.6f}\n")
+                f.write(f"RIC:                {test_metrics.get('ric', 0):.6f}\n")
+
+            f.write("\n")
+
+            # Rolling window summary (if available)
+            rolling_stats_path = os.path.join(self.args['log_dir'], 'rolling_window_stats.csv')
+            if os.path.exists(rolling_stats_path):
+                f.write("ROLLING WINDOW EVALUATION:\n")
+                f.write("-"*80 + "\n")
+                rolling_stats = pd.read_csv(rolling_stats_path, index_col=0)
+                f.write(rolling_stats.to_string())
+                f.write("\n\n")
+
+            # File paths
+            f.write("OUTPUT FILES:\n")
+            f.write("-"*80 + "\n")
+            f.write(f"Best Model:              {self.best_path}\n")
+            f.write(f"Validation Metrics:      {self.val_csv}\n")
+            f.write(f"Test Metrics:            {self.test_csv}\n")
+            f.write(f"Test Predictions:        {self.test_pred_csv}\n")
+            f.write(f"Best Val Predictions:    {self.best_val_pred_csv}\n")
+            f.write(f"Rolling Window Results:  {os.path.join(self.args['log_dir'], 'rolling_window_results.csv')}\n")
+            f.write(f"Rolling Window Stats:    {rolling_stats_path}\n")
+            f.write("\n")
+
+            f.write("="*80 + "\n")
+            f.write("END OF REPORT\n")
+            f.write("="*80 + "\n")
+
+        self.logger.info(f"Summary report saved to: {summary_txt}")
+
+        # Also print key metrics to console
+        print("\n" + "="*80)
+        print("TRAINING COMPLETED")
+        print("="*80)
+        print(f"Model: {self.args.get('model_name', 'MAMBA_BGNN')}")
+        print(f"Total Time: {self.total_training_time:.2f}s ({self.total_training_time/60:.2f} min)")
+        print(f"Avg Epoch Time: {avg_epoch_time:.2f}s")
+        print("-"*80)
+        if self.loss_type == 'bayesian':
+            print(f"Test RMSE:  {test_metrics.get('rmse', 0):.6f}")
+            print(f"Test IC:    {test_metrics.get('ic', 0):.6f}")
+            print(f"Test RIC:   {test_metrics.get('ric', 0):.6f}")
+            print(f"Test NLL:   {test_metrics.get('nll', 0):.6f}")
+            print(f"Test CRPS:  {test_metrics.get('crps', 0):.6f}")
+        else:
+            print(f"Test RMSE:  {test_metrics.get('rmse', 0):.6f}")
+            print(f"Test IC:    {test_metrics.get('ic', 0):.6f}")
+            print(f"Test RIC:   {test_metrics.get('ric', 0):.6f}")
+        print("="*80)
+        print(f"Summary saved to: {summary_txt}")
+        print("="*80 + "\n")
+
+        return summary_txt

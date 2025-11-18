@@ -17,7 +17,7 @@ def make_loader(x, y, batch_size):
     return DataLoader(TensorDataset(x, y), batch_size=batch_size,
                       shuffle=False, drop_last=False)
 
-def data_processing(data_path, window, batch_size):
+def data_processing(data_path, window, batch_size, leaky_features=None):
     """
     Process financial data with proper train/val/test splits and feature normalization
     
@@ -35,13 +35,14 @@ def data_processing(data_path, window, batch_size):
     _ = df.pop('Name')
 
     # 1. REMOVE HIGHLY LEAKY FEATURES
-    leaky_features = []#['mom','mom1','mom2','mom3', 'ROC_5', 'ROC_10', 'ROC_15', 'ROC_20']
-    features_removed = []
-    for feat in leaky_features:
-        if feat in df.columns:
-            df = df.drop(columns=[feat])
-            features_removed.append(feat)
-    print(f"   ❌ Removed {len(features_removed)} highly leaky features: {features_removed}")
+    #['mom','mom1','mom2','mom3', 'ROC_5', 'ROC_10', 'ROC_15', 'ROC_20']
+    if leaky_features: 
+        features_removed = []
+        for feat in leaky_features:
+            if feat in df.columns:
+                df = df.drop(columns=[feat])
+                features_removed.append(feat)
+        print(f"   ❌ Removed {len(features_removed)} highly leaky features: {features_removed}")
 
     print(" Data shape:", df.shape)
     

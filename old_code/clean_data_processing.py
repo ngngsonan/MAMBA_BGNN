@@ -280,7 +280,7 @@ def main():
     print("="*60)
 
     for dataset in datasets:
-        data_path = f'Dataset/combined_dataframe_{dataset}.csv'
+        data_path = f'../Dataset/combined_dataframe_{dataset}.csv'
 
         if not Path(data_path).exists():
             print(f"❌ Dataset {dataset} not found")
