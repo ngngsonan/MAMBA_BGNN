@@ -1,0 +1,36 @@
+================================================================================
+MAMBA_GNN MODELS COMPARISON SUMMARY
+================================================================================
+Dataset: DJI
+Timestamp: 20251118_153409
+Models trained: BIMamba+GCN, BIMamba+GAT, BIMamba+GraphSAGE, BIMamba+MAGAC
+================================================================================
+
+METRICS COMPARISON:
+--------------------------------------------------------------------------------
+            Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+      BIMamba+GCN 0.009990 0.007437 0.265146 0.259720 0.588462  2.3484 0.0902   4.1657 0.086080               3.83           92.0
+      BIMamba+GAT 0.006990 0.005618 0.927652 0.891720 0.778846 10.4871 0.0290  47.0997 0.086025               4.01          116.4
+BIMamba+GraphSAGE 0.010358 0.007798 0.049345 0.038013 0.492308  0.1083 0.2172   0.0812 0.086088               3.82          107.0
+    BIMamba+MAGAC 0.003958 0.003126 0.936361 0.921354 0.876923 13.0741 0.0108 141.1460 0.085989               4.64           97.5
+
+================================================================================
+
+BEST MODELS BY METRIC:
+--------------------------------------------------------------------------------
+RMSE        : BIMamba+MAGAC   (0.003958)
+MAE         : BIMamba+MAGAC   (0.003126)
+IC          : BIMamba+MAGAC   (0.936361)
+RIC         : BIMamba+MAGAC   (0.921354)
+DIR_ACC     : BIMamba+MAGAC   (0.876923)
+SHARPE      : BIMamba+MAGAC   (13.074136)
+CALMAR      : BIMamba+MAGAC   (141.145996)
+CRPS        : BIMamba+MAGAC   (0.085989)
+
+TRAINING TIME SUMMARY:
+--------------------------------------------------------------------------------
+BIMamba+GCN    :   92.0s total,  3.83s/epoch
+BIMamba+GAT    :  116.4s total,  4.01s/epoch
+BIMamba+GraphSAGE:  107.0s total,  3.82s/epoch
+BIMamba+MAGAC  :   97.5s total,  4.64s/epoch
+TOTAL          :  413.0s (6.9 minutes)

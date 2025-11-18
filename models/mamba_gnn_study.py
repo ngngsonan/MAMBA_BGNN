@@ -734,36 +734,79 @@ def train_gnn_comparison(
 
 if __name__ == "__main__":
     """
-    Example: Compare GNN layers with BIMamba
-    """
-    # Check device
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"Using device: {device}\n")
+    Example: Train GNN comparison models and calculate cross-sectional IC
 
-    results = train_gnn_comparison(
-        dataset='DJI',
-        models=['GCN', 'GAT', 'GraphSAGE', 'MAGAC'],
-        epochs=500,
-        loss_type='auto',
-        early_stop_patience=10,
-        hidden_dim=64,
-        window=5,
-        batch_size=32,
-        learning_rate=0.001,
-        R=3,
-        K=3,
-        d_e=10,
-        heads=4,
-        verbose=True,
-        device=device
+    Step 1: Train models on multiple datasets
+    Step 2: Calculate cross-sectional IC for all models
+    """
+    from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
+    # Check if CUDA is available
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Using device: {device}")
+
+    # Step 1: Train models on multiple datasets
+    print("\n" + "="*80)
+    print("STEP 1: Training GNN comparison models on multiple datasets")
+    print("="*80)
+
+    datasets = ['IXIC', 'DJI', 'NYSE']
+    models = ['GCN', 'GAT', 'GraphSAGE', 'MAGAC']
+
+    for dataset in datasets:
+        print(f"\n>>> Training on {dataset}...")
+        results = train_gnn_comparison(
+            dataset=dataset,
+            models=models,
+            epochs=50,
+            loss_type='auto',
+            early_stop_patience=10,
+            hidden_dim=64,
+            window=5,
+            batch_size=32,
+            learning_rate=0.001,
+            R=3,
+            K=3,
+            d_e=10,
+            heads=4,
+            verbose=True,
+            device=device
+        )
+
+    # Step 2: Calculate cross-sectional IC for all models
+    print("\n" + "="*80)
+    print("STEP 2: Calculating cross-sectional IC for GNN models")
+    print("="*80)
+
+    # Model names with prefix for cross-sectional calculation
+    model_names = ['BIMamba+GCN', 'BIMamba+GAT', 'BIMamba+GraphSAGE', 'BIMamba+MAGAC']
+
+    cross_results = calculate_cross_sectional_for_all_models(
+        models=model_names,
+        datasets=datasets,
+        study_name='mamba_gnn',
+        output_file='logs/mamba_gnn_cross_sectional_summary.txt',
+        verbose=True
     )
 
     print("\n" + "="*80)
-    print("STUDY COMPLETED")
+    print("✓ MAMBA-GNN Comparison Study Completed!")
     print("="*80)
-    print("Check logs/mamba_gnn/ for detailed results")
-    print("\nArchitecture Summary:")
+    print("\nCross-Sectional IC Results:")
+    for model_name, result in cross_results.items():
+        if result.get('error'):
+            print(f"  {model_name}: Error - {result['error']}")
+        else:
+            print(f"  {model_name}: IC={result['cross_sectional']['ic_mean']:.6f}, "
+                  f"RIC={result['cross_sectional']['ric_mean']:.6f}")
+
+    print("\nModel Architecture Summary:")
     print("  BIMamba+GCN:       Bidirectional Mamba + Graph Convolutional Network")
     print("  BIMamba+GAT:       Bidirectional Mamba + Graph Attention Network")
     print("  BIMamba+GraphSAGE: Bidirectional Mamba + GraphSAGE")
     print("  BIMamba+MAGAC:     Bidirectional Mamba + Multi-head Adaptive GAC (baseline)")
+
+    print("\nDetailed results:")
+    print("  - Single-dataset results: logs/mamba_gnn/")
+    print("  - Cross-sectional IC: logs/mamba_gnn_cross_sectional_summary.txt")
+

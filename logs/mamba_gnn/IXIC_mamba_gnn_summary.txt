@@ -1,0 +1,36 @@
+================================================================================
+MAMBA_GNN MODELS COMPARISON SUMMARY
+================================================================================
+Dataset: IXIC
+Timestamp: 20251118_152455
+Models trained: BIMamba+GCN, BIMamba+GAT, BIMamba+GraphSAGE, BIMamba+MAGAC
+================================================================================
+
+METRICS COMPARISON:
+--------------------------------------------------------------------------------
+            Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+      BIMamba+GCN 0.015463 0.011893 0.370767 0.345201 0.596154  3.5246 0.1250   7.0670 0.086231               3.85          123.3
+      BIMamba+GAT 0.002502 0.001813 0.993654 0.994567 0.961538 17.4373 0.0036 795.0059 0.085978               3.93          161.2
+BIMamba+GraphSAGE 0.015728 0.012255 0.279226 0.242504 0.557692  2.7412 0.1128   6.1618 0.086240               3.64          113.0
+    BIMamba+MAGAC 0.002696 0.002084 0.987899 0.988366 0.946154 17.1505 0.0045 631.4330 0.085979               4.59          156.2
+
+================================================================================
+
+BEST MODELS BY METRIC:
+--------------------------------------------------------------------------------
+RMSE        : BIMamba+GAT     (0.002502)
+MAE         : BIMamba+GAT     (0.001813)
+IC          : BIMamba+GAT     (0.993654)
+RIC         : BIMamba+GAT     (0.994567)
+DIR_ACC     : BIMamba+GAT     (0.961538)
+SHARPE      : BIMamba+GAT     (17.437250)
+CALMAR      : BIMamba+GAT     (795.005920)
+CRPS        : BIMamba+GAT     (0.085978)
+
+TRAINING TIME SUMMARY:
+--------------------------------------------------------------------------------
+BIMamba+GCN    :  123.3s total,  3.85s/epoch
+BIMamba+GAT    :  161.2s total,  3.93s/epoch
+BIMamba+GraphSAGE:  113.0s total,  3.64s/epoch
+BIMamba+MAGAC  :  156.2s total,  4.59s/epoch
+TOTAL          :  553.7s (9.2 minutes)

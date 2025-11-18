@@ -1,0 +1,112 @@
+================================================================================
+CROSS-SECTIONAL IC SUMMARY FOR ALL MODELS
+================================================================================
+Generated: 2025-11-18 15:51:57
+Models: BIMamba+GCN, BIMamba+GAT, BIMamba+GraphSAGE, BIMamba+MAGAC
+Datasets: IXIC, DJI, NYSE
+================================================================================
+
+
+----------------------------------------------------------------------
+Model: BIMamba+GCN
+----------------------------------------------------------------------
+Datasets used: IXIC, DJI, NYSE
+Valid time points: 520
+
+Cross-Sectional IC:
+  Mean:       0.096270
+  Std:        0.630844
+  Median:     0.166961
+  % Positive:    56.3%
+
+Cross-Sectional RIC:
+  Mean:       0.108654
+  Std:        0.660144
+  Median:     0.500000
+  % Positive:    57.9%
+
+Comparison (Single-Asset vs Cross-Sectional):
+          Asset       IC      RIC
+           IXIC 0.370767 0.345197
+            DJI 0.265146 0.259720
+           NYSE 0.196321 0.153966
+CROSS-SECTIONAL 0.096270 0.108654
+
+----------------------------------------------------------------------
+Model: BIMamba+GAT
+----------------------------------------------------------------------
+Datasets used: IXIC, DJI, NYSE
+Valid time points: 520
+
+Cross-Sectional IC:
+  Mean:       0.706843
+  Std:        0.475204
+  Median:     0.927256
+  % Positive:    90.0%
+
+Cross-Sectional RIC:
+  Mean:       0.643269
+  Std:        0.508725
+  Median:     1.000000
+  % Positive:    88.8%
+
+Comparison (Single-Asset vs Cross-Sectional):
+          Asset       IC      RIC
+           IXIC 0.993654 0.994567
+            DJI 0.927652 0.891720
+           NYSE 0.975751 0.972225
+CROSS-SECTIONAL 0.706843 0.643269
+
+----------------------------------------------------------------------
+Model: BIMamba+GraphSAGE
+----------------------------------------------------------------------
+Datasets used: IXIC, DJI, NYSE
+Valid time points: 520
+
+Cross-Sectional IC:
+  Mean:       0.037221
+  Std:        0.691439
+  Median:     0.065582
+  % Positive:    52.1%
+
+Cross-Sectional RIC:
+  Mean:       0.039423
+  Std:        0.701567
+  Median:     0.500000
+  % Positive:    53.7%
+
+Comparison (Single-Asset vs Cross-Sectional):
+          Asset       IC      RIC
+           IXIC 0.279226 0.242504
+            DJI 0.049345 0.038005
+           NYSE 0.224080 0.191798
+CROSS-SECTIONAL 0.037221 0.039423
+
+----------------------------------------------------------------------
+Model: BIMamba+MAGAC
+----------------------------------------------------------------------
+Datasets used: IXIC, DJI, NYSE
+Valid time points: 520
+
+Cross-Sectional IC:
+  Mean:       0.768249
+  Std:        0.438154
+  Median:     0.947486
+  % Positive:    92.3%
+
+Cross-Sectional RIC:
+  Mean:       0.715385
+  Std:        0.446949
+  Median:     1.000000
+  % Positive:    92.7%
+
+Comparison (Single-Asset vs Cross-Sectional):
+          Asset       IC      RIC
+           IXIC 0.987899 0.988366
+            DJI 0.936361 0.921354
+           NYSE 0.987351 0.984311
+CROSS-SECTIONAL 0.768249 0.715385
+
+================================================================================
+END OF SUMMARY
+================================================================================
