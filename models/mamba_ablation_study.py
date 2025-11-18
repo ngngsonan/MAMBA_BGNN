@@ -1,5 +1,5 @@
 """
-MAMBA Ablation Models Module - Model Definitions Only
+MAMBA Ablation Models Module - Model Definitions and Training Interface
 
 This module contains MAMBA architecture variants for ablation study:
     1. MAMBA     - Single direction Mamba baseline (forward only)
@@ -13,6 +13,32 @@ Key Ablation Dimensions:
     - Direction:  Single (forward) vs Bidirectional (forward + backward)
     - SSM:        Mamba (original) vs Mamba-2 (with Structured State-Space Duality)
     - Enhancement: Basic vs Enhanced (with cross-attention)
+
+Usage:
+
+    Train MAMBA models on a dataset:
+    ================================
+    from models.mamba_ablation_study import train_ablation_models
+
+    results = train_ablation_models(
+        dataset='IXIC',
+        models=['MAMBA', 'BIMAMBA', 'MAMBA+', 'BIMAMBA+'],
+        epochs=50,
+        verbose=True
+    )
+
+
+    Calculate cross-sectional IC for all MAMBA models:
+    ==================================================
+    from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
+    # After training on multiple datasets
+    cross_results = calculate_cross_sectional_for_all_models(
+        models=['MAMBA', 'BIMAMBA', 'MAMBA+', 'BIMAMBA+'],
+        datasets=['IXIC', 'DJI', 'NYSE'],
+        study_name='mamba_ablation',
+        output_file='logs/mamba_ablation_cross_sectional_summary.txt'
+    )
 
 """
 
@@ -582,31 +608,72 @@ def train_ablation_models(
 
 if __name__ == "__main__":
     """
-    Example: Train all MAMBA ablation models
+    Example: Train MAMBA ablation models and calculate cross-sectional IC
+
+    Step 1: Train models on multiple datasets
+    Step 2: Calculate cross-sectional IC for all models
     """
+    from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
     # Check if CUDA is available
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
 
-    results = train_ablation_models(
-        dataset='DJI',
-        models=['MAMBA', 'BIMAMBA', 'MAMBA+', 'BIMAMBA+'],  # All 4 models
-        epochs=50,
-        loss_type='auto',
-        early_stop_patience=10,
-        hidden_dim=64,
-        window=5,
-        batch_size=32,
-        learning_rate=0.001,
-        R=3,
-        verbose=True,
-        device=device
+    # Step 1: Train models on multiple datasets
+    print("\n" + "="*80)
+    print("STEP 1: Training MAMBA ablation models on multiple datasets")
+    print("="*80)
+
+    datasets = ['IXIC', 'DJI', 'NYSE']
+    models = ['MAMBA', 'BIMAMBA', 'MAMBA+', 'BIMAMBA+']
+
+    for dataset in datasets:
+        print(f"\n>>> Training on {dataset}...")
+        results = train_ablation_models(
+            dataset=dataset,
+            models=models,
+            epochs=50,
+            loss_type='auto',
+            early_stop_patience=10,
+            hidden_dim=64,
+            window=5,
+            batch_size=32,
+            learning_rate=0.001,
+            R=3,
+            verbose=True,
+            device=device
+        )
+
+    # Step 2: Calculate cross-sectional IC for all models
+    print("\n" + "="*80)
+    print("STEP 2: Calculating cross-sectional IC for MAMBA models")
+    print("="*80)
+
+    cross_results = calculate_cross_sectional_for_all_models(
+        models=models,
+        datasets=datasets,
+        study_name='mamba_ablation',
+        output_file='logs/mamba_ablation_cross_sectional_summary.txt',
+        verbose=True
     )
 
-    print("\nAblation study completed!")
-    print("Check logs/ablation/ for detailed results and comparison.")
+    print("\n" + "="*80)
+    print("✓ MAMBA Ablation Study Completed!")
+    print("="*80)
+    print("\nCross-Sectional IC Results:")
+    for model_name, result in cross_results.items():
+        if result.get('error'):
+            print(f"  {model_name}: Error - {result['error']}")
+        else:
+            print(f"  {model_name}: IC={result['cross_sectional']['ic_mean']:.6f}, "
+                  f"RIC={result['cross_sectional']['ric_mean']:.6f}")
+
     print("\nModel Architecture Summary:")
     print("  MAMBA:     Single-direction Mamba (forward only)")
     print("  BIMAMBA:   Bidirectional Mamba (forward + backward)")
     print("  MAMBA+:    Single-direction Mamba-2 with SSD")
     print("  BIMAMBA+:  Bidirectional Mamba-2 with SSD + attention")
+
+    print("\nDetailed results:")
+    print("  - Single-dataset results: logs/mamba_ablation/")
+    print("  - Cross-sectional IC: logs/mamba_ablation_cross_sectional_summary.txt")

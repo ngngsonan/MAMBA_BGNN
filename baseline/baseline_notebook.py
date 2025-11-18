@@ -1,15 +1,15 @@
 """
-Baseline Models Training - Integrated with Main Project Pipeline
+Baseline Models - Model Definitions and Training Interface
 
-This script trains baseline models using the same data processing and evaluation
-pipeline as the main MAMBA_BGNN model for fair comparison.
+This module provides baseline model definitions for comparison with MAMBA_BGNN.
+Uses utils.baseline_trainer for the unified training pipeline.
 
 Key Features:
+- 5 baseline model architectures (Linear, LSTM, Transformer, AGCRN, TemporalGN)
+- Automatic prediction saving for cross-sectional IC analysis
+- Clear distinction between single-asset IC and cross-sectional IC
 - Uses utils.data_processing for consistent train/val/test splits (80/5/15)
-- Out-of-time testing (no data leakage)
 - Comprehensive metrics (probabilistic, financial, regime analysis)
-- Logs saved to logs/baselines/{model_name}/
-- Summary report with model comparison
 
 Available Models:
     1. Linear - Simple feedforward baseline
@@ -19,14 +19,28 @@ Available Models:
     5. TemporalGN - Temporal Graph Network
 
 Usage:
-    # In Python script or Jupyter notebook
+
+    Train baseline models on a dataset:
+    ===================================
     from baseline.baseline_notebook import train_all_baselines
 
     results = train_all_baselines(
         dataset='IXIC',
-        models=['Linear', 'LSTM', 'Transformer', 'AGCRN', 'TemporalGN'],
+        models=['Linear', 'LSTM', 'Transformer'],
         epochs=50,
         loss_type='auto'
+    )
+
+
+    Calculate cross-sectional IC for all models:
+    ============================================
+    from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
+    # After training on multiple datasets
+    cross_results = calculate_cross_sectional_for_all_models(
+        models=['Linear', 'LSTM', 'Transformer'],
+        datasets=['IXIC', 'DJI', 'NYSE'],
+        output_file='logs/cross_sectional_summary.txt'
     )
 """
 
@@ -49,8 +63,13 @@ import time
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import data processing from utils
+# Import data processing and training utilities from utils
 from utils.data_processing import data_processing
+from utils.baseline_trainer import (
+    train_models,
+    calculate_cross_sectional_metrics,
+    compare_single_vs_cross_sectional_ic
+)
 
 # ============================================================================
 # LOSS FUNCTIONS
@@ -354,202 +373,9 @@ def picp_and_gap(mu, sigma, y, q=0.90):
 
 
 # ============================================================================
-# TRAINER
+# NOTE: train_one_model() is now imported from utils.baseline_trainer
+# The unified version supports scheduler, device, and cross-sectional IC
 # ============================================================================
-
-def train_one_model(model_name: str, model: nn.Module, loss_fn, optimizer,
-                   train_loader, val_loader, test_loader,
-                   epochs: int, patience: int, log_dir: str,
-                   verbose: bool = True):
-    """
-    Train a single baseline model with comprehensive metrics tracking
-
-    Returns:
-        Dictionary with training history and test metrics
-    """
-    os.makedirs(log_dir, exist_ok=True)
-
-    # CSV paths
-    val_csv = os.path.join(log_dir, 'val_metrics.csv')
-    test_csv = os.path.join(log_dir, 'test_metrics.csv')
-
-    # Initialize CSVs
-    val_header = ['epoch', 'nll', 'rmse', 'mae', 'ic', 'ric']
-    test_header = ['nll', 'rmse', 'mae', 'ic', 'ric', 'dir_acc', 'sharpe',
-                  'max_drawdown', 'calmar', 'hit_rate', 'crps', 'picp90', 'gap90']
-
-    if not os.path.exists(val_csv):
-        with open(val_csv, 'w', newline='') as f:
-            csv.writer(f).writerow(val_header)
-    if not os.path.exists(test_csv):
-        with open(test_csv, 'w', newline='') as f:
-            csv.writer(f).writerow(test_header)
-
-    best_loss = float('inf')
-    best_state = None
-    not_improved = 0
-    history = {'train_loss': [], 'val_loss': [], 'epoch_times': []}
-
-    print(f"\n{'='*80}")
-    print(f"Training: {model_name}")
-    print(f"{'='*80}")
-
-    # Track total training time
-    training_start_time = time.time()
-
-    for epoch in range(1, epochs + 1):
-        epoch_start_time = time.time()
-        # Train
-        model.train()
-        train_loss = 0.0
-        for x, y in train_loader:
-            optimizer.zero_grad()
-            mu, log_var = model(x)
-            loss = loss_fn(mu, y.squeeze(), log_var.exp())
-            loss.backward()
-            optimizer.step()
-            train_loss += loss.item()
-
-        train_loss /= len(train_loader)
-
-        # Validate
-        model.eval()
-        val_loss = 0.0
-        preds, trues, logvars = [], [], []
-        with torch.no_grad():
-            for x, y in val_loader:
-                mu, log_var = model(x)
-                val_loss += loss_fn(mu, y.squeeze(), log_var.exp()).item()
-                preds.append(mu)
-                trues.append(y.squeeze())
-                logvars.append(log_var)
-
-        val_loss /= len(val_loader)
-
-        preds = torch.cat(preds, 0)
-        trues = torch.cat(trues, 0)
-        logvars = torch.cat(logvars, 0)
-
-        # Calculate validation metrics
-        rmse = torch.sqrt(torch.mean((trues - preds)**2)).item()
-        mae = torch.mean(torch.abs(trues - preds)).item()
-        ic = pearson(trues, preds).item()
-        ric_val = ric(trues, preds).item()
-
-        # Calculate epoch time
-        epoch_time = time.time() - epoch_start_time
-        history['train_loss'].append(train_loss)
-        history['val_loss'].append(val_loss)
-        history['epoch_times'].append(epoch_time)
-
-        # Log to CSV
-        with open(val_csv, 'a', newline='') as f:
-            csv.writer(f).writerow([epoch, val_loss, rmse, mae, ic, ric_val])
-
-        if verbose and epoch % 5 == 0:
-            print(f"Epoch {epoch}/{epochs} - Train: {train_loss:.6f}, Val: {val_loss:.6f}, "
-                  f"RMSE: {rmse:.6f}, IC: {ic:.4f}, Time: {epoch_time:.2f}s")
-
-        # Early stopping
-        if val_loss < best_loss:
-            best_loss = val_loss
-            best_state = copy.deepcopy(model.state_dict())
-            not_improved = 0
-            if verbose:
-                print(f"✓ New best model (Val Loss: {val_loss:.6f})")
-        else:
-            not_improved += 1
-            if not_improved >= patience:
-                if verbose:
-                    print(f"Early stopping at epoch {epoch}")
-                break
-
-    # Calculate total training time
-    total_training_time = time.time() - training_start_time
-    avg_epoch_time = np.mean(history['epoch_times']) if history['epoch_times'] else 0.0
-
-    if verbose:
-        print(f"\n⏱️  Training completed in {total_training_time:.2f}s")
-        print(f"   Average: {avg_epoch_time:.2f}s/epoch")
-
-    # Load best model and test
-    if best_state is not None:
-        model.load_state_dict(best_state)
-
-    # Test with comprehensive metrics
-    model.eval()
-    test_preds, test_trues, test_logvars = [], [], []
-    with torch.no_grad():
-        for x, y in test_loader:
-            mu, log_var = model(x)
-            test_preds.append(mu)
-            test_trues.append(y.squeeze())
-            test_logvars.append(log_var)
-
-    test_preds = torch.cat(test_preds, 0)
-    test_trues = torch.cat(test_trues, 0)
-    test_logvars = torch.cat(test_logvars, 0)
-    test_sigmas = torch.exp(0.5 * test_logvars).clamp_min(1e-8)
-
-    # Calculate test metrics
-    test_nll = loss_fn(test_preds, test_trues, test_sigmas.pow(2)).item()
-    test_rmse = torch.sqrt(torch.mean((test_trues - test_preds)**2)).item()
-    test_mae = torch.mean(torch.abs(test_trues - test_preds)).item()
-    test_ic = pearson(test_trues, test_preds).item()
-    test_ric = ric(test_trues, test_preds).item()
-    test_dir_acc = directional_accuracy(test_preds, test_trues)
-
-    # Portfolio metrics
-    port_metrics = calculate_portfolio_metrics(test_preds, test_trues)
-
-    # Probabilistic metrics
-    test_crps = crps_gaussian(test_preds, test_sigmas, test_trues).mean().item()
-    test_picp90, test_gap90 = picp_and_gap(test_preds, test_sigmas, test_trues, q=0.90)
-
-    # Save test metrics
-    test_metrics = {
-        'model': model_name,
-        'nll': test_nll,
-        'rmse': test_rmse,
-        'mae': test_mae,
-        'ic': test_ic,
-        'ric': test_ric,
-        'dir_acc': test_dir_acc,
-        'sharpe': port_metrics['sharpe'],
-        'max_drawdown': port_metrics['max_drawdown'],
-        'calmar': port_metrics['calmar'],
-        'hit_rate': port_metrics['hit_rate'],
-        'crps': test_crps,
-        'picp90': test_picp90,
-        'gap90': test_gap90,
-        'total_time': total_training_time,
-        'avg_epoch_time': avg_epoch_time
-    }
-
-    with open(test_csv, 'a', newline='') as f:
-        csv.writer(f).writerow([
-            test_nll, test_rmse, test_mae, test_ic, test_ric, test_dir_acc,
-            port_metrics['sharpe'], port_metrics['max_drawdown'],
-            port_metrics['calmar'], port_metrics['hit_rate'],
-            test_crps, test_picp90, test_gap90
-        ])
-
-    if verbose:
-        print(f"\n[{model_name}] Test Results:")
-        print(f"  RMSE: {test_rmse:.6f}")
-        print(f"  MAE:  {test_mae:.6f}")
-        print(f"  IC:   {test_ic:.6f}")
-        print(f"  RIC:  {test_ric:.6f}")
-        print(f"  Dir Acc: {test_dir_acc:.6f}")
-        print(f"  Sharpe: {port_metrics['sharpe']:.4f}")
-        print(f"  Max DD: {port_metrics['max_drawdown']:.4f}")
-        print(f"  ⏱️  Avg time: {avg_epoch_time:.2f}s/epoch")
-
-    # Save model
-    torch.save(best_state, os.path.join(log_dir, 'best_model.pth'))
-
-    test_metrics['history'] = history
-    return test_metrics
 
 
 # ============================================================================
@@ -567,10 +393,16 @@ def train_all_baselines(
     loss_type: str = 'auto',
     early_stop_patience: int = 10,
     verbose: bool = True,
-    log_base_dir: str = 'logs/baselines'
+    log_base_dir: str = 'logs',
+    device: str = 'cpu'
 ) -> Dict:
     """
-    Train all baseline models using project's data processing pipeline
+    Train all baseline models using unified baseline_trainer pipeline
+
+    This function uses the unified baseline_trainer.py which:
+    - Automatically saves predictions for cross-sectional IC analysis
+    - Clearly labels IC/RIC as single-asset time-series metrics
+    - Provides cross-sectional IC calculation functions
 
     Args:
         dataset: Dataset name (IXIC, DJI, NYSE)
@@ -584,21 +416,17 @@ def train_all_baselines(
         early_stop_patience: Early stopping patience
         verbose: Print progress
         log_base_dir: Base directory for logs
+        device: Device to train on ('cpu' or 'cuda')
 
     Returns:
         Dictionary with results for each model
+
+    Note:
+        IC/RIC shown in results are SINGLE-ASSET time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_ic_example()
     """
     if models is None:
         models = ['Linear', 'LSTM', 'Transformer', 'AGCRN', 'TemporalGN']
-
-    print("="*80)
-    print("BASELINE MODELS TRAINING - Integrated Pipeline")
-    print("="*80)
-    print(f"Dataset: {dataset}")
-    print(f"Models: {', '.join(models)}")
-    print(f"Window: {window}, Batch: {batch_size}, Epochs: {epochs}")
-    print(f"Loss: {loss_type}, LR: {learning_rate}")
-    print("="*80)
 
     # Load data using utils.data_processing
     print("\nLoading data with utils.data_processing...")
@@ -611,113 +439,169 @@ def train_all_baselines(
     print(f"  Val:   {len(val_loader.dataset)} samples")
     print(f"  Test:  {len(test_loader.dataset)} samples (out-of-time)")
 
-    # Train each model
-    results = {}
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
+    # Create model instances
+    models_dict = {}
     for model_name in models:
-        # Create model
         if model_name == 'Linear':
-            model = LinearBaseline(num_features, window, hidden_dim)
+            models_dict[model_name] = LinearBaseline(num_features, window, hidden_dim)
         elif model_name == 'LSTM':
-            model = LSTMBaseline(num_features, window, hidden_dim)
+            models_dict[model_name] = LSTMBaseline(num_features, window, hidden_dim)
         elif model_name == 'Transformer':
-            model = TransformerBaseline(num_features, window, hidden_dim)
+            models_dict[model_name] = TransformerBaseline(num_features, window, hidden_dim)
         elif model_name == 'AGCRN':
-            model = AGCRNBaseline(num_features, window, hidden_dim)
+            models_dict[model_name] = AGCRNBaseline(num_features, window, hidden_dim)
         elif model_name == 'TemporalGN':
-            model = TemporalGNBaseline(num_features, window, hidden_dim)
+            models_dict[model_name] = TemporalGNBaseline(num_features, window, hidden_dim)
         else:
             print(f"Unknown model: {model_name}, skipping...")
-            continue
 
-        # Setup loss and optimizer
-        loss_fn = get_loss_function(loss_type, model_name)
-        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    # Train using unified baseline_trainer
+    config = {
+        'epochs': epochs,
+        'lr': learning_rate,
+        'loss_type': loss_type,
+        'patience': early_stop_patience,
+        'optimizer_fn': lambda params, lr: torch.optim.Adam(params, lr=lr),
+        'scheduler_fn': None
+    }
 
-        # Create log directory
-        log_dir = os.path.join(log_base_dir, f'{dataset}_{model_name}_{timestamp}')
-
-        # Train
-        metrics = train_one_model(
-            model_name, model, loss_fn, optimizer,
-            train_loader, val_loader, test_loader,
-            epochs, early_stop_patience, log_dir, verbose
-        )
-
-        results[model_name] = metrics
-
-    # Create summary report
-    summary_dir = os.path.join(log_base_dir, f'{dataset}_summary_{timestamp}')
-    os.makedirs(summary_dir, exist_ok=True)
-
-    # Save comparison table
-    comparison_df = pd.DataFrame([
-        {
-            'Model': name,
-            'RMSE': f"{data['rmse']:.6f}",
-            'MAE': f"{data['mae']:.6f}",
-            'IC': f"{data['ic']:.6f}",
-            'RIC': f"{data['ric']:.6f}",
-            'Dir Acc': f"{data['dir_acc']:.6f}",
-            'Sharpe': f"{data['sharpe']:.4f}",
-            'Max DD': f"{data['max_drawdown']:.4f}",
-            'Avg Time (s/epoch)': f"{data['avg_epoch_time']:.2f}",
-            'Total Time (s)': f"{data['total_time']:.1f}"
-        }
-        for name, data in results.items()
-    ])
-
-    comparison_csv = os.path.join(summary_dir, 'baseline_comparison.csv')
-    comparison_df.to_csv(comparison_csv, index=False)
-
-    # Create text summary
-    summary_txt = os.path.join(summary_dir, 'baseline_summary.txt')
-    with open(summary_txt, 'w') as f:
-        f.write("="*80 + "\n")
-        f.write("BASELINE MODELS COMPARISON SUMMARY\n")
-        f.write("="*80 + "\n")
-        f.write(f"Dataset: {dataset}\n")
-        f.write(f"Timestamp: {timestamp}\n")
-        f.write(f"Models trained: {', '.join(results.keys())}\n")
-        f.write("="*80 + "\n\n")
-        f.write("METRICS COMPARISON:\n")
-        f.write("-"*80 + "\n")
-        f.write(comparison_df.to_string(index=False))
-        f.write("\n\n" + "="*80 + "\n")
-
-        # Best model by each metric
-        f.write("\nBEST MODELS BY METRIC:\n")
-        f.write("-"*80 + "\n")
-
-        metrics_to_check = ['rmse', 'mae', 'ic', 'ric', 'dir_acc', 'sharpe']
-        for metric in metrics_to_check:
-            values = {name: data[metric] for name, data in results.items()}
-            if metric in ['rmse', 'mae']:
-                best_model = min(values, key=values.get)
-            else:
-                best_model = max(values, key=values.get)
-            f.write(f"{metric.upper():12s}: {best_model:15s} ({values[best_model]:.6f})\n")
-
-        # Training time summary
-        f.write("\nTRAINING TIME SUMMARY:\n")
-        f.write("-"*80 + "\n")
-        for name, data in results.items():
-            f.write(f"{name:15s}: {data['total_time']:6.1f}s total, {data['avg_epoch_time']:5.2f}s/epoch\n")
-        total_all = sum(data['total_time'] for data in results.values())
-        f.write(f"{'TOTAL':15s}: {total_all:6.1f}s ({total_all/60:.1f} minutes)\n")
-
-    print("\n" + "="*80)
-    print("TRAINING SUMMARY")
-    print("="*80)
-    print(comparison_df.to_string(index=False))
-    print("\n" + "="*80)
-    print(f"✓ Results saved to: {summary_dir}")
-    print(f"  - Comparison table: {comparison_csv}")
-    print(f"  - Summary report: {summary_txt}")
-    print("="*80)
+    results = train_models(
+        models_dict=models_dict,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        dataset=dataset,
+        config=config,
+        log_base_dir=log_base_dir,
+        study_name='baseline',
+        verbose=verbose,
+        device=device
+    )
 
     return results
+
+
+# ============================================================================
+# CROSS-SECTIONAL IC HELPER FUNCTIONS
+# ============================================================================
+
+def calculate_cross_sectional_ic_example(
+    model_name: str = 'Linear',
+    assets: List[str] = None,
+    log_base_dir: str = 'logs',
+    study_name: str = 'baseline',
+    timestamp: str = None
+) -> Dict:
+    """
+    Calculate cross-sectional IC across multiple assets (helper function)
+
+    This function demonstrates how to use calculate_cross_sectional_metrics()
+    to compute true cross-sectional IC after training models on multiple datasets.
+
+    Args:
+        model_name: Name of the model (e.g., 'Linear', 'LSTM')
+        assets: List of asset names (default: ['IXIC', 'DJI', 'NYSE'])
+        log_base_dir: Base log directory
+        study_name: Study name (e.g., 'baseline', 'ablation')
+        timestamp: Specific timestamp to use (None = find latest)
+
+    Returns:
+        Dictionary with cross-sectional IC results
+
+    Example Usage (Copy to notebook cell):
+        ```python
+        from baseline.baseline_notebook import calculate_cross_sectional_ic_example
+
+        # After training models on IXIC, DJI, NYSE
+        results = calculate_cross_sectional_ic_example(
+            model_name='Linear',
+            assets=['IXIC', 'DJI', 'NYSE']
+        )
+
+        print(f"Cross-Sectional IC: {results['ic_mean']:.6f}")
+        print(f"Cross-Sectional RIC: {results['ric_mean']:.6f}")
+        ```
+    """
+    import glob
+
+    if assets is None:
+        assets = ['IXIC', 'DJI', 'NYSE']
+
+    print(f"\n{'='*70}")
+    print(f"CROSS-SECTIONAL IC ANALYSIS: {model_name}")
+    print(f"{'='*70}")
+    print(f"Assets: {', '.join(assets)}")
+
+    # Find prediction files
+    prediction_files = {}
+    for asset in assets:
+        # Search pattern: logs/baseline/{asset}_{model_name}_{timestamp}/test_predictions.csv
+        if timestamp:
+            pattern = f"{log_base_dir}/{study_name}/{asset}_{model_name}_{timestamp}/test_predictions.csv"
+        else:
+            pattern = f"{log_base_dir}/{study_name}/{asset}_{model_name}_*/test_predictions.csv"
+
+        matches = glob.glob(pattern)
+        if not matches:
+            raise FileNotFoundError(
+                f"No predictions found for {asset} {model_name}\n"
+                f"Pattern: {pattern}\n"
+                f"Make sure you've trained the model on all assets first!"
+            )
+
+        # Use the most recent if multiple matches
+        pred_file = sorted(matches)[-1]
+        prediction_files[asset] = pred_file
+        print(f"  {asset}: {pred_file}")
+
+    # Calculate cross-sectional IC
+    print(f"\n{'='*70}")
+    results = calculate_cross_sectional_metrics(prediction_files, verbose=True)
+
+    return results
+
+
+def compare_single_vs_cross_ic_example(
+    model_name: str = 'Linear',
+    assets: List[str] = None,
+    log_base_dir: str = 'logs',
+    study_name: str = 'baseline'
+):
+    """
+    Compare single-asset IC vs cross-sectional IC (helper function)
+
+    Example Usage (Copy to notebook cell):
+        ```python
+        from baseline.baseline_notebook import compare_single_vs_cross_ic_example
+
+        comparison_df = compare_single_vs_cross_ic_example(
+            model_name='Linear',
+            assets=['IXIC', 'DJI', 'NYSE']
+        )
+
+        print(comparison_df)
+        ```
+    """
+    import glob
+
+    if assets is None:
+        assets = ['IXIC', 'DJI', 'NYSE']
+
+    # Find prediction files
+    prediction_files = {}
+    for asset in assets:
+        pattern = f"{log_base_dir}/{study_name}/{asset}_{model_name}_*/test_predictions.csv"
+        matches = glob.glob(pattern)
+        if not matches:
+            raise FileNotFoundError(f"No predictions found for {asset} {model_name}")
+        prediction_files[asset] = sorted(matches)[-1]
+
+    # Compare
+    comparison_df = compare_single_vs_cross_sectional_ic(prediction_files, verbose=True)
+
+    return comparison_df
+
+
 
 
 # ============================================================================
@@ -726,15 +610,52 @@ def train_all_baselines(
 
 if __name__ == "__main__":
     """
-    Example: Train all baseline models
+    Example: Train baselines and calculate cross-sectional IC
+
+    Step 1: Train models on multiple datasets
+    Step 2: Calculate cross-sectional IC for all models
     """
-    results = train_all_baselines(
-        dataset='IXIC',
-        models=['Linear', 'LSTM', 'Transformer', 'AGCRN', 'TemporalGN'],
-        epochs=50,
-        loss_type='auto',
+
+    from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
+    # Step 1: Train models on multiple datasets
+    print("\n" + "="*80)
+    print("STEP 1: Training baseline models on multiple datasets")
+    print("="*80)
+
+    datasets = ['IXIC', 'DJI', 'NYSE']
+    models = ['Linear', 'LSTM', 'Transformer']
+
+    for dataset in datasets:
+        print(f"\n>>> Training on {dataset}...")
+        results = train_all_baselines(
+            dataset=dataset,
+            models=models,
+            epochs=50,
+            loss_type='auto',
+            verbose=True
+        )
+
+    # Step 2: Calculate cross-sectional IC for all models
+    print("\n" + "="*80)
+    print("STEP 2: Calculating cross-sectional IC for all models")
+    print("="*80)
+
+    cross_results = calculate_cross_sectional_for_all_models(
+        models=models,
+        datasets=datasets,
+        output_file='logs/cross_sectional_summary.txt',
         verbose=True
     )
 
-    print("\nTraining completed!")
-    print("Check logs/baselines/ for detailed results and comparison.")
+    print("\n" + "="*80)
+    print("✓ All steps completed!")
+    print("="*80)
+    print("\nResults summary:")
+    for model_name, result in cross_results.items():
+        if result.get('error'):
+            print(f"  {model_name}: Error - {result['error']}")
+        else:
+            print(f"  {model_name}: IC={result['cross_sectional']['ic_mean']:.6f}, "
+                  f"RIC={result['cross_sectional']['ric_mean']:.6f}")
+    print("\nDetailed results saved to: logs/cross_sectional_summary.txt")

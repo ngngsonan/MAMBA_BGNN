@@ -12,8 +12,20 @@ Key Features:
 - CSV logging for validation and test metrics
 - Model checkpointing
 - Summary report generation
+- Cross-sectional IC/RIC calculation across multiple assets
+- Automatic prediction saving for cross-asset analysis
+- Batch processing for multiple models and datasets
+
+IMPORTANT: IC/RIC Metrics Clarification
+- Single-Asset IC/RIC: Correlation across TIME for a single asset (usually high ~0.3-0.9)
+- Cross-Sectional IC/RIC: Correlation across ASSETS at each time point (usually low ~0.01-0.05)
+- The metrics shown during training are SINGLE-ASSET time-series correlations
+- For true cross-sectional IC, use calculate_cross_sectional_metrics()
 
 Usage:
+
+    1. Train models on a single dataset:
+    ====================================
     from utils.baseline_trainer import train_models
 
     results = train_models(
@@ -23,6 +35,30 @@ Usage:
         test_loader=test_loader,
         config={'epochs': 50, 'lr': 0.001, ...}
     )
+
+
+    2. Calculate cross-sectional IC for all models (RECOMMENDED):
+    =============================================================
+    from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
+    # After training on multiple datasets
+    cross_results = calculate_cross_sectional_for_all_models(
+        models=['Linear', 'LSTM', 'Transformer'],
+        datasets=['IXIC', 'DJI', 'NYSE'],
+        output_file='logs/cross_sectional_summary.txt'
+    )
+
+
+    3. Calculate cross-sectional IC for a single model:
+    ===================================================
+    from utils.baseline_trainer import calculate_cross_sectional_metrics
+
+    prediction_files = {
+        'IXIC': 'logs/.../IXIC_.../test_predictions.csv',
+        'DJI': 'logs/.../DJI_.../test_predictions.csv',
+        'NYSE': 'logs/.../NYSE_.../test_predictions.csv'
+    }
+    cross_ic_results = calculate_cross_sectional_metrics(prediction_files)
 """
 
 import torch
@@ -101,7 +137,13 @@ def get_loss_function(loss_type: str, model_name: str = None):
 # ============================================================================
 
 def pearson(x, y):
-    """Pearson correlation coefficient"""
+    """
+    Pearson correlation coefficient (Single-Asset Time-Series)
+
+    NOTE: This calculates correlation across TIME for a SINGLE asset.
+    This is NOT the cross-sectional IC used in quantitative finance.
+    For cross-sectional IC, use calculate_cross_sectional_metrics().
+    """
     vx, vy = x - x.mean(), y - y.mean()
     return (vx * vy).sum() / (torch.sqrt((vx ** 2).sum()) * torch.sqrt((vy ** 2).sum()) + 1e-12)
 
@@ -116,7 +158,13 @@ def rank_tensor(x):
 
 
 def ric(x, y):
-    """Rank Information Coefficient (Spearman correlation)"""
+    """
+    Rank Information Coefficient (Single-Asset Time-Series Spearman)
+
+    NOTE: This calculates Spearman correlation across TIME for a SINGLE asset.
+    This is NOT the cross-sectional RIC used in quantitative finance.
+    For cross-sectional RIC, use calculate_cross_sectional_metrics().
+    """
     rx, ry = rank_tensor(x), rank_tensor(y)
     return pearson(rx, ry)
 
@@ -189,6 +237,232 @@ def picp_and_gap(mu, sigma, y, q=0.90):
 
 
 # ============================================================================
+# CROSS-SECTIONAL METRICS (Multi-Asset Analysis)
+# ============================================================================
+
+def calculate_cross_sectional_metrics(
+    prediction_files: Dict[str, str],
+    verbose: bool = True
+) -> Dict:
+    """
+    Calculate CROSS-SECTIONAL IC and RIC across multiple assets.
+
+    This function computes the true cross-sectional Information Coefficient (IC)
+    and Rank Information Coefficient (RIC) as used in quantitative finance.
+    At each time point t, it calculates the correlation between predictions
+    and actual returns ACROSS DIFFERENT ASSETS (not across time).
+
+    Args:
+        prediction_files: Dictionary mapping asset names to prediction CSV file paths
+                         Example: {'IXIC': 'logs/.../test_predictions.csv',
+                                  'DJI': 'logs/.../test_predictions.csv',
+                                  'NYSE': 'logs/.../test_predictions.csv'}
+        verbose: Print detailed results
+
+    Returns:
+        Dictionary containing:
+            - daily_ic: Array of cross-sectional IC at each time point
+            - daily_ric: Array of cross-sectional RIC at each time point
+            - ic_mean: Mean cross-sectional IC
+            - ic_std: Std of cross-sectional IC
+            - ric_mean: Mean cross-sectional RIC
+            - ric_std: Std of cross-sectional RIC
+            - ic_positive_ratio: % of days with positive IC
+            - ric_positive_ratio: % of days with positive RIC
+
+    Usage (in notebook):
+        from utils.baseline_trainer import calculate_cross_sectional_metrics
+
+        prediction_files = {
+            'IXIC': 'logs/baseline/IXIC_Linear_20250118_120000/test_predictions.csv',
+            'DJI': 'logs/baseline/DJI_Linear_20250118_120000/test_predictions.csv',
+            'NYSE': 'logs/baseline/NYSE_Linear_20250118_120000/test_predictions.csv'
+        }
+
+        results = calculate_cross_sectional_metrics(prediction_files)
+        print(f"Cross-sectional IC: {results['ic_mean']:.6f}")
+    """
+    from scipy.stats import pearsonr, spearmanr
+
+    # Load predictions
+    data = {}
+    for asset_name, file_path in prediction_files.items():
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Prediction file not found: {file_path}")
+        df = pd.read_csv(file_path)
+        data[asset_name] = df
+        if verbose:
+            print(f"Loaded {asset_name}: {len(df)} samples")
+
+    # Verify all assets have same number of samples
+    assets = list(data.keys())
+    n_samples = len(data[assets[0]])
+    for asset in assets:
+        if len(data[asset]) != n_samples:
+            raise ValueError(f"Sample count mismatch for {asset}: {len(data[asset])} vs {n_samples}")
+
+    # Calculate cross-sectional IC and RIC for each time point
+    daily_ic = []
+    daily_ric = []
+
+    if verbose:
+        print(f"\nCalculating cross-sectional IC across {len(assets)} assets for {n_samples} time points...")
+
+    for t in range(n_samples):
+        # Get predictions and actual returns at time t across all assets
+        pred_t = [data[asset]['mu'].iloc[t] for asset in assets]
+        actual_t = [data[asset]['y'].iloc[t] for asset in assets]
+
+        # Calculate Pearson correlation (IC) and Spearman correlation (RIC)
+        if len(set(pred_t)) > 1 and len(set(actual_t)) > 1:
+            ic_t, _ = pearsonr(pred_t, actual_t)
+            ric_t, _ = spearmanr(pred_t, actual_t)
+        else:
+            ic_t, ric_t = 0, 0
+
+        daily_ic.append(ic_t)
+        daily_ric.append(ric_t)
+
+    # Convert to numpy arrays
+    daily_ic = np.array(daily_ic)
+    daily_ric = np.array(daily_ric)
+
+    # Remove NaN values for statistics
+    daily_ic_clean = daily_ic[~np.isnan(daily_ic)]
+    daily_ric_clean = daily_ric[~np.isnan(daily_ric)]
+
+    # Calculate statistics
+    results = {
+        'daily_ic': daily_ic,
+        'daily_ric': daily_ric,
+        'ic_mean': float(np.mean(daily_ic_clean)),
+        'ic_std': float(np.std(daily_ic_clean)),
+        'ic_median': float(np.median(daily_ic_clean)),
+        'ric_mean': float(np.mean(daily_ric_clean)),
+        'ric_std': float(np.std(daily_ric_clean)),
+        'ric_median': float(np.median(daily_ric_clean)),
+        'ic_positive_ratio': float(np.sum(daily_ic_clean > 0) / len(daily_ic_clean)),
+        'ric_positive_ratio': float(np.sum(daily_ric_clean > 0) / len(daily_ric_clean)),
+        'valid_days': len(daily_ic_clean),
+        'num_time_points': len(daily_ic_clean),  # Alias for consistency
+        'assets': assets
+    }
+
+    if verbose:
+        print("\n" + "="*70)
+        print("CROSS-SECTIONAL IC ANALYSIS (Multi-Asset)")
+        print("="*70)
+        print(f"Assets analyzed: {', '.join(assets)}")
+        print(f"Valid trading days: {results['valid_days']}")
+        print(f"\nCross-Sectional Information Coefficient (IC):")
+        print(f"  Mean:       {results['ic_mean']:.6f}")
+        print(f"  Std:        {results['ic_std']:.6f}")
+        print(f"  Median:     {results['ic_median']:.6f}")
+        print(f"  % Positive: {results['ic_positive_ratio']*100:.1f}%")
+
+        print(f"\nCross-Sectional Rank IC (RIC):")
+        print(f"  Mean:       {results['ric_mean']:.6f}")
+        print(f"  Std:        {results['ric_std']:.6f}")
+        print(f"  Median:     {results['ric_median']:.6f}")
+        print(f"  % Positive: {results['ric_positive_ratio']*100:.1f}%")
+
+        print(f"\n📊 INTERPRETATION:")
+        if results['ic_mean'] > 0.05:
+            print("   🔥 EXCEPTIONAL: IC > 0.05 is extremely rare in real markets!")
+        elif results['ic_mean'] > 0.02:
+            print("   🚀 EXCELLENT: IC > 0.02 indicates very strong predictive power")
+        elif results['ic_mean'] > 0.01:
+            print("   ✅ GOOD: IC > 0.01 shows solid predictive ability")
+        elif results['ic_mean'] > 0.005:
+            print("   📈 DECENT: IC > 0.005 has commercial value")
+        else:
+            print("   📉 WEAK: IC ≤ 0.005 may not be practically useful")
+
+        print("\nNOTE: Cross-sectional IC measures correlation ACROSS ASSETS at each")
+        print("      time point, unlike single-asset IC which measures correlation")
+        print("      across TIME for a single asset.")
+        print("="*70)
+
+    return results
+
+
+def compare_single_vs_cross_sectional_ic(
+    prediction_files: Dict[str, str],
+    verbose: bool = True
+) -> pd.DataFrame:
+    """
+    Compare single-asset time-series IC vs cross-sectional IC.
+
+    This function helps understand the difference between:
+    - Single-asset IC: Correlation across TIME for each asset individually
+    - Cross-sectional IC: Correlation across ASSETS at each time point
+
+    Args:
+        prediction_files: Dictionary mapping asset names to prediction CSV paths
+        verbose: Print comparison table
+
+    Returns:
+        DataFrame with comparison results
+
+    Usage (in notebook):
+        from utils.baseline_trainer import compare_single_vs_cross_sectional_ic
+
+        prediction_files = {
+            'IXIC': 'logs/.../IXIC_.../test_predictions.csv',
+            'DJI': 'logs/.../DJI_.../test_predictions.csv',
+            'NYSE': 'logs/.../NYSE_.../test_predictions.csv'
+        }
+
+        comparison_df = compare_single_vs_cross_sectional_ic(prediction_files)
+    """
+    # Calculate cross-sectional IC
+    cross_results = calculate_cross_sectional_metrics(prediction_files, verbose=False)
+
+    # Calculate single-asset time-series IC for each asset
+    single_asset_results = []
+    for asset_name, file_path in prediction_files.items():
+        df = pd.read_csv(file_path)
+
+        # Time-series correlation (across time for single asset)
+        ts_ic = np.corrcoef(df['mu'], df['y'])[0, 1]
+        ts_ric = pd.DataFrame({'pred': df['mu'], 'actual': df['y']}).corr('spearman').loc['pred', 'actual']
+
+        single_asset_results.append({
+            'Asset': asset_name,
+            'Single-Asset IC (Time-Series)': ts_ic,
+            'Single-Asset RIC (Time-Series)': ts_ric
+        })
+
+    # Create comparison table
+    comparison_df = pd.DataFrame(single_asset_results)
+
+    # Add cross-sectional metrics
+    summary = {
+        'Asset': 'CROSS-SECTIONAL',
+        'Single-Asset IC (Time-Series)': cross_results['ic_mean'],
+        'Single-Asset RIC (Time-Series)': cross_results['ric_mean']
+    }
+    comparison_df = pd.concat([comparison_df, pd.DataFrame([summary])], ignore_index=True)
+
+    # Rename columns for clarity
+    comparison_df.columns = ['Asset', 'IC', 'RIC']
+
+    if verbose:
+        print("\n" + "="*70)
+        print("COMPARISON: Single-Asset (Time-Series) vs Cross-Sectional IC")
+        print("="*70)
+        print("\nSingle-Asset IC: Correlation of predictions vs actuals ACROSS TIME")
+        print("                 for each individual asset (usually high ~0.3-0.9)")
+        print("\nCross-Sectional IC: Correlation of predictions vs actuals ACROSS ASSETS")
+        print("                    at each time point (usually low ~0.01-0.05)")
+        print("\n" + "-"*70)
+        print(comparison_df.to_string(index=False))
+        print("="*70)
+
+    return comparison_df
+
+
+# ============================================================================
 # TRAINING FUNCTION
 # ============================================================================
 
@@ -238,8 +512,9 @@ def train_one_model(
     test_csv = os.path.join(log_dir, 'test_metrics.csv')
 
     # Initialize CSVs
-    val_header = ['epoch', 'nll', 'rmse', 'mae', 'ic', 'ric']
-    test_header = ['nll', 'rmse', 'mae', 'ic', 'ric', 'dir_acc', 'sharpe',
+    # NOTE: IC and RIC in these CSVs are SINGLE-ASSET time-series metrics
+    val_header = ['epoch', 'nll', 'rmse', 'mae', 'ic_single_asset', 'ric_single_asset']
+    test_header = ['nll', 'rmse', 'mae', 'ic_single_asset', 'ric_single_asset', 'dir_acc', 'sharpe',
                   'max_drawdown', 'calmar', 'hit_rate', 'crps', 'picp90', 'gap90']
 
     if not os.path.exists(val_csv):
@@ -298,10 +573,11 @@ def train_one_model(
         logvars = torch.cat(logvars, 0)
 
         # Calculate validation metrics
+        # NOTE: IC and RIC here are SINGLE-ASSET time-series correlations
         rmse = torch.sqrt(torch.mean((trues - preds)**2)).item()
         mae = torch.mean(torch.abs(trues - preds)).item()
-        ic = pearson(trues, preds).item()
-        ric_val = ric(trues, preds).item()
+        ic = pearson(trues, preds).item()  # Single-asset time-series IC
+        ric_val = ric(trues, preds).item()  # Single-asset time-series RIC
 
         # Update learning rate
         if scheduler is not None:
@@ -362,11 +638,12 @@ def train_one_model(
     test_sigmas = torch.exp(0.5 * test_logvars).clamp_min(1e-8)
 
     # Calculate test metrics
+    # NOTE: IC and RIC here are SINGLE-ASSET time-series correlations
     test_nll = loss_fn(test_preds, test_trues, test_sigmas.pow(2)).item()
     test_rmse = torch.sqrt(torch.mean((test_trues - test_preds)**2)).item()
     test_mae = torch.mean(torch.abs(test_trues - test_preds)).item()
-    test_ic = pearson(test_trues, test_preds).item()
-    test_ric = ric(test_trues, test_preds).item()
+    test_ic = pearson(test_trues, test_preds).item()  # Single-asset time-series IC
+    test_ric = ric(test_trues, test_preds).item()  # Single-asset time-series RIC
     test_dir_acc = directional_accuracy(test_preds, test_trues)
 
     # Portfolio metrics
@@ -408,15 +685,31 @@ def train_one_model(
         print(f"\n[{model_name}] Test Results:")
         print(f"  RMSE: {test_rmse:.6f}")
         print(f"  MAE:  {test_mae:.6f}")
-        print(f"  IC:   {test_ic:.6f}")
-        print(f"  RIC:  {test_ric:.6f}")
+        print(f"  IC (single-asset):  {test_ic:.6f}")
+        print(f"  RIC (single-asset): {test_ric:.6f}")
         print(f"  Dir Acc: {test_dir_acc:.6f}")
         print(f"  Sharpe: {port_metrics['sharpe']:.4f}")
         print(f"  Max DD: {port_metrics['max_drawdown']:.4f}")
         print(f"  ⏱️  Avg time: {avg_epoch_time:.2f}s/epoch")
+        print(f"\n  NOTE: IC/RIC are single-asset time-series correlations.")
+        print(f"        For cross-sectional IC, use calculate_cross_sectional_metrics()")
 
     # Save model
     torch.save(best_state, os.path.join(log_dir, 'best_model.pth'))
+
+    # Save test predictions for cross-sectional analysis
+    predictions_df = pd.DataFrame({
+        'sample_idx': range(len(test_preds)),
+        'mu': test_preds.cpu().numpy(),
+        'log_var': test_logvars.cpu().numpy(),
+        'sigma': test_sigmas.cpu().numpy(),
+        'y': test_trues.cpu().numpy()
+    })
+    predictions_csv = os.path.join(log_dir, 'test_predictions.csv')
+    predictions_df.to_csv(predictions_csv, index=False)
+
+    if verbose:
+        print(f"  💾 Predictions saved to: {predictions_csv}")
 
     test_metrics['history'] = history
     return test_metrics
@@ -500,10 +793,19 @@ def train_models(
 
         # Train
         metrics = train_one_model(
-            model_name, model, loss_fn, optimizer,
-            train_loader, val_loader, test_loader,
-            config['epochs'], config['patience'], log_dir,
-            scheduler, device, verbose
+            model_name=model_name,
+            model=model,
+            loss_fn=loss_fn,
+            optimizer=optimizer,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            test_loader=test_loader,
+            epochs=config['epochs'],
+            patience=config['patience'],
+            log_dir=log_dir,
+            scheduler=scheduler,
+            device=device,
+            verbose=verbose
         )
 
         results[model_name] = metrics
@@ -579,5 +881,211 @@ def train_models(
     print(f"  - Comparison table: {comparison_csv}")
     print(f"  - Summary report: {summary_txt}")
     print("="*80)
+    print("\n📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.")
+    print("   For CROSS-SECTIONAL IC across multiple assets, use:")
+    print("   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics")
+    print("   >>> prediction_files = {")
+    print(f"   ...     'IXIC': 'logs/.../{dataset}_IXIC_.../test_predictions.csv',")
+    print(f"   ...     'DJI': 'logs/.../{dataset}_DJI_.../test_predictions.csv',")
+    print(f"   ...     'NYSE': 'logs/.../{dataset}_NYSE_.../test_predictions.csv'")
+    print("   ... }")
+    print("   >>> results = calculate_cross_sectional_metrics(prediction_files)")
+    print("="*80)
 
     return results
+
+
+# ============================================================================
+# BATCH CROSS-SECTIONAL IC CALCULATION
+# ============================================================================
+
+def calculate_cross_sectional_for_all_models(
+    models: List[str],
+    datasets: List[str],
+    log_base_dir: str = 'logs',
+    study_name: str = 'baseline',
+    output_file: str = None,
+    verbose: bool = True
+) -> Dict:
+    """
+    Calculate cross-sectional IC for all models across multiple datasets
+
+    This is a simple loop function that:
+    1. For each model, calculates cross-sectional IC across all datasets
+    2. Compares single-asset vs cross-sectional IC
+    3. Collects all results into one dictionary
+    4. Optionally saves to a summary file
+
+    Args:
+        models: List of model names (e.g., ['Linear', 'LSTM', 'Transformer'])
+        datasets: List of dataset names (e.g., ['IXIC', 'DJI', 'NYSE'])
+        log_base_dir: Base directory for logs
+        study_name: Study name (e.g., 'baseline', 'ablation')
+        output_file: Path to save summary (None = don't save)
+        verbose: Print progress
+
+    Returns:
+        Dictionary with structure:
+        {
+            'Linear': {
+                'cross_sectional': {...},  # Results from calculate_cross_sectional_metrics
+                'comparison': DataFrame    # Results from compare_single_vs_cross_sectional_ic
+            },
+            'LSTM': {...},
+            ...
+        }
+
+    Example Usage (Copy to notebook cell):
+        ```python
+        from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
+        # After training all models on all datasets
+        results = calculate_cross_sectional_for_all_models(
+            models=['Linear', 'LSTM', 'Transformer'],
+            datasets=['IXIC', 'DJI', 'NYSE'],
+            output_file='logs/cross_sectional_summary.txt',
+            verbose=True
+        )
+
+        # Access results
+        print(f"Linear IC: {results['Linear']['cross_sectional']['ic_mean']:.6f}")
+        print(results['Linear']['comparison'])
+        ```
+    """
+    import glob
+
+    if len(datasets) < 2:
+        raise ValueError(f"Need at least 2 datasets for cross-sectional IC. Got {len(datasets)}: {datasets}")
+
+    if verbose:
+        print("\n" + "="*80)
+        print("CROSS-SECTIONAL IC ANALYSIS FOR ALL MODELS")
+        print("="*80)
+        print(f"Models: {', '.join(models)}")
+        print(f"Datasets: {', '.join(datasets)}")
+        print("="*80)
+
+    all_results = {}
+
+    for model_name in models:
+        if verbose:
+            print(f"\n{'='*70}")
+            print(f"Processing model: {model_name}")
+            print(f"{'='*70}")
+
+        # Find prediction files for this model across all datasets
+        prediction_files = {}
+        for dataset in datasets:
+            pattern = f"{log_base_dir}/{study_name}/{dataset}_{model_name}_*/test_predictions.csv"
+            matches = glob.glob(pattern)
+
+            if not matches:
+                if verbose:
+                    print(f"  ⚠️  No predictions found for {dataset} (pattern: {pattern})")
+                continue
+
+            # Use the most recent
+            pred_file = sorted(matches)[-1]
+            prediction_files[dataset] = pred_file
+            if verbose:
+                print(f"  ✓ {dataset}: {pred_file}")
+
+        if len(prediction_files) < 2:
+            if verbose:
+                print(f"  ⚠️  Skipping {model_name}: need >=2 datasets, found {len(prediction_files)}")
+            all_results[model_name] = {
+                'error': f'Insufficient datasets (need >=2, found {len(prediction_files)})',
+                'cross_sectional': None,
+                'comparison': None
+            }
+            continue
+
+        try:
+            # Calculate cross-sectional IC
+            if verbose:
+                print(f"\n  Calculating cross-sectional IC...")
+            cross_results = calculate_cross_sectional_metrics(
+                prediction_files,
+                verbose=verbose
+            )
+
+            # Compare single-asset vs cross-sectional
+            if verbose:
+                print(f"\n  Comparing single-asset vs cross-sectional IC...")
+            comparison_df = compare_single_vs_cross_sectional_ic(
+                prediction_files,
+                verbose=verbose
+            )
+
+            all_results[model_name] = {
+                'cross_sectional': cross_results,
+                'comparison': comparison_df,
+                'datasets_used': list(prediction_files.keys())
+            }
+
+            if verbose:
+                print(f"\n  ✓ {model_name} completed")
+                print(f"    Cross-Sectional IC:  {cross_results['ic_mean']:.6f}")
+                print(f"    Cross-Sectional RIC: {cross_results['ric_mean']:.6f}")
+
+        except Exception as e:
+            if verbose:
+                print(f"  ❌ Error processing {model_name}: {str(e)}")
+            all_results[model_name] = {
+                'error': str(e),
+                'cross_sectional': None,
+                'comparison': None
+            }
+
+    # Save summary if requested
+    if output_file is not None:
+        os.makedirs(os.path.dirname(output_file) if os.path.dirname(output_file) else '.', exist_ok=True)
+
+        with open(output_file, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("CROSS-SECTIONAL IC SUMMARY FOR ALL MODELS\n")
+            f.write("="*80 + "\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Models: {', '.join(models)}\n")
+            f.write(f"Datasets: {', '.join(datasets)}\n")
+            f.write("="*80 + "\n\n")
+
+            for model_name, result in all_results.items():
+                f.write(f"\n{'-'*70}\n")
+                f.write(f"Model: {model_name}\n")
+                f.write(f"{'-'*70}\n")
+
+                if result.get('error'):
+                    f.write(f"Error: {result['error']}\n")
+                    continue
+
+                cross = result['cross_sectional']
+                f.write(f"Datasets used: {', '.join(result['datasets_used'])}\n")
+                f.write(f"Valid time points: {cross['valid_days']}\n\n")
+
+                f.write(f"Cross-Sectional IC:\n")
+                f.write(f"  Mean:       {cross['ic_mean']:>8.6f}\n")
+                f.write(f"  Std:        {cross['ic_std']:>8.6f}\n")
+                f.write(f"  Median:     {cross['ic_median']:>8.6f}\n")
+                f.write(f"  % Positive: {cross['ic_positive_ratio']*100:>7.1f}%\n\n")
+
+                f.write(f"Cross-Sectional RIC:\n")
+                f.write(f"  Mean:       {cross['ric_mean']:>8.6f}\n")
+                f.write(f"  Std:        {cross['ric_std']:>8.6f}\n")
+                f.write(f"  Median:     {cross['ric_median']:>8.6f}\n")
+                f.write(f"  % Positive: {cross['ric_positive_ratio']*100:>7.1f}%\n\n")
+
+                # Comparison table
+                f.write("Comparison (Single-Asset vs Cross-Sectional):\n")
+                f.write(result['comparison'].to_string(index=False) + "\n")
+
+            f.write("\n" + "="*80 + "\n")
+            f.write("END OF SUMMARY\n")
+            f.write("="*80 + "\n")
+
+        if verbose:
+            print(f"\n{'='*80}")
+            print(f"✓ Summary saved to: {output_file}")
+            print(f"{'='*80}")
+
+    return all_results

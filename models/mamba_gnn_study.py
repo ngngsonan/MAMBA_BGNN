@@ -11,6 +11,32 @@ All models output (mean, log_var) for probabilistic evaluation.
 
 Key Ablation Dimension:
     - Graph Layer: Compare different graph convolution architectures after BIMamba encoding
+
+Usage:
+
+    Train GNN comparison models on a dataset:
+    =========================================
+    from models.mamba_gnn_study import train_gnn_comparison
+
+    results = train_gnn_comparison(
+        dataset='IXIC',
+        models=['GCN', 'GAT', 'GraphSAGE', 'MAGAC'],
+        epochs=50,
+        verbose=True
+    )
+
+
+    Calculate cross-sectional IC for all GNN models:
+    ================================================
+    from utils.baseline_trainer import calculate_cross_sectional_for_all_models
+
+    # After training on multiple datasets
+    cross_results = calculate_cross_sectional_for_all_models(
+        models=['BIMamba+GCN', 'BIMamba+GAT', 'BIMamba+GraphSAGE', 'BIMamba+MAGAC'],
+        datasets=['IXIC', 'DJI', 'NYSE'],
+        study_name='mamba_gnn',
+        output_file='logs/mamba_gnn_cross_sectional_summary.txt'
+    )
 """
 
 import torch
@@ -717,7 +743,7 @@ if __name__ == "__main__":
     results = train_gnn_comparison(
         dataset='DJI',
         models=['GCN', 'GAT', 'GraphSAGE', 'MAGAC'],
-        epochs=50,
+        epochs=500,
         loss_type='auto',
         early_stop_patience=10,
         hidden_dim=64,
