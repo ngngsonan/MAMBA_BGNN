@@ -3,7 +3,7 @@ Bayesian vs Non-Bayesian MAMBA-BGNN Comparison Study
 
 This module performs comprehensive comparison between:
     1. Bayesian MAGAC (with MC sampling & uncertainty quantification)
-    2. Non-Bayesian MAGAC (deterministic, from mamba_gnn_study.py)
+    2. Non-Bayesian MAGAC (deterministic, no MC sampling)
 
 Experiments run on 3 datasets: IXIC, DJI, NYSE
 
@@ -13,17 +13,15 @@ Key analyses:
     - Uncertainty quality (calibration, CRPS)
     - Risk-adjusted performance
 
-Usage:
-    python models/run_bayesian_vs_nonbayesian.py
+Usage in Notebook:
+    1. Run setup cell
+    2. Choose mode (Quick Test, Single Dataset, Multi-Dataset)
+    3. Run training cell
+    4. Run analysis cell
+    5. Generate plots
 
-    Or import:
-    from models.run_bayesian_vs_nonbayesian import run_comparison_study
-
-    results = run_comparison_study(
-        datasets=['IXIC', 'DJI', 'NYSE'],
-        epochs=50,
-        device='cuda'
-    )
+Or run as script:
+    python models/run_bayesian_vs_nonbayesian.py --datasets IXIC DJI NYSE
 """
 
 import torch
@@ -40,21 +38,12 @@ from einops import rearrange, repeat, einsum
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import utilities
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.baseline_trainer import (
-    train_models,
-    regime_analysis,
-    compute_financial_metrics,
-    compare_bayesian_vs_nonbayesian
-)
-from utils.result_plot import plot_bayesian_vs_nonbayesian_comparison
-from financial_metrics import FinancialMetrics, MarketRegimeAnalysis
-
 
 # ============================================================================
-# Import model components from bimamba_bgnn_tuneparams.py
+# CELL 1: MODEL COMPONENTS
 # ============================================================================
+# This cell defines all model architecture components
+# Run this cell first in notebooks
 
 @dataclass
 class ModelArgs:
@@ -175,8 +164,9 @@ class BIMambaBlock(nn.Module):
 
 
 # ============================================================================
-# Non-Bayesian MAGAC (Deterministic)
+# CELL 2: GRAPH NEURAL NETWORK LAYERS
 # ============================================================================
+# Non-Bayesian and Bayesian MAGAC implementations
 
 class MAGAC_NonBayesian(nn.Module):
     """
@@ -225,15 +215,7 @@ class MAGAC_NonBayesian(nn.Module):
         return alpha * A_g + (1 - alpha) * A_attn_h
 
     def forward(self, x):
-        """
-        Deterministic forward pass
-
-        Args:
-            x: (B, N, L)
-        Returns:
-            out: (B, N) - mean prediction
-            log_var: (B, N) - fixed log variance
-        """
+        """Deterministic forward pass - No MC sampling"""
         B, N, L = x.shape
 
         # Build effective adjacency
@@ -265,14 +247,10 @@ class MAGAC_NonBayesian(nn.Module):
             out = out + mix_w[h] * out_h
 
         # Fixed uncertainty (non-Bayesian)
-        log_var = torch.ones_like(out) * (-3.0)  # Fixed small variance
+        log_var = torch.ones_like(out) * (-3.0)
 
         return out, log_var
 
-
-# ============================================================================
-# Bayesian MAGAC (with MC Sampling)
-# ============================================================================
 
 class MAGAC_Bayesian(nn.Module):
     """
@@ -381,15 +359,7 @@ class MAGAC_Bayesian(nn.Module):
         return out
 
     def forward(self, x):
-        """
-        Stochastic forward with MC sampling
-
-        Args:
-            x: (B, N, L)
-        Returns:
-            mean: (B, N)
-            log_var: (B, N)
-        """
+        """Stochastic forward with MC sampling"""
         outs = []
 
         if self.training:
@@ -414,8 +384,9 @@ class MAGAC_Bayesian(nn.Module):
 
 
 # ============================================================================
-# Full Models
+# CELL 3: FULL MODELS
 # ============================================================================
+# BIMamba + MAGAC (Bayesian and Non-Bayesian versions)
 
 class BIMamba_MAGAC_NonBayesian(nn.Module):
     """BIMamba + Non-Bayesian MAGAC (Deterministic)"""
@@ -470,11 +441,17 @@ class BIMamba_MAGAC_Bayesian(nn.Module):
 
 
 # ============================================================================
-# Data loading utility
+# CELL 4: DATA LOADING UTILITY
 # ============================================================================
+# Simple data loading for quick experiments
 
 def load_data(dataset: str, window: int = 5, batch_size: int = 32):
-    """Load dataset and return dataloaders"""
+    """
+    Load dataset and return dataloaders
+
+    Returns:
+        num_features, train_loader, val_loader, test_loader
+    """
     import pandas as pd
     from torch.utils.data import Dataset, DataLoader
 
@@ -518,18 +495,160 @@ def load_data(dataset: str, window: int = 5, batch_size: int = 32):
 
 
 # ============================================================================
-# Main Comparison Function
+# CELL 5: TRAINING FUNCTIONS
 # ============================================================================
+# Training loop with early stopping
 
-def run_comparison_study(
-    datasets: List[str] = ['IXIC', 'DJI', 'NYSE'],
+def train_single_model(
+    model: nn.Module,
+    train_loader,
+    val_loader,
+    epochs: int = 50,
+    lr: float = 0.001,
+    patience: int = 10,
+    device: str = 'cpu',
+    verbose: bool = True
+):
+    """Train a single model with early stopping"""
+
+    model = model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    # GaussianNLL loss
+    def loss_fn(mu, log_var, y):
+        var = torch.exp(log_var)
+        loss = 0.5 * (log_var + ((y - mu) ** 2) / var)
+        return loss.mean()
+
+    best_val_loss = float('inf')
+    patience_counter = 0
+    best_model_state = None
+
+    for epoch in range(epochs):
+        # Train
+        model.train()
+        train_loss = 0.0
+
+        for batch_x, batch_y in train_loader:
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
+
+            optimizer.zero_grad()
+            mu, log_var = model(batch_x)
+            loss = loss_fn(mu, log_var, batch_y)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.item() * len(batch_y)
+
+        train_loss /= len(train_loader.dataset)
+
+        # Validate
+        model.eval()
+        val_loss = 0.0
+
+        with torch.no_grad():
+            for batch_x, batch_y in val_loader:
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
+
+                mu, log_var = model(batch_x)
+                loss = loss_fn(mu, log_var, batch_y)
+
+                val_loss += loss.item() * len(batch_y)
+
+        val_loss /= len(val_loader.dataset)
+
+        # Early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+            best_model_state = model.state_dict().copy()
+        else:
+            patience_counter += 1
+
+        if verbose and (epoch + 1) % 10 == 0:
+            print(f"Epoch {epoch+1}/{epochs}: Train Loss={train_loss:.6f}, Val Loss={val_loss:.6f}")
+
+        if patience_counter >= patience:
+            if verbose:
+                print(f"Early stopping at epoch {epoch+1}")
+            break
+
+    # Load best model
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+
+    return model
+
+
+def evaluate_model(model: nn.Module, test_loader, device: str = 'cpu'):
+    """Evaluate model and compute metrics"""
+    model.eval()
+
+    all_preds = []
+    all_targets = []
+    all_log_vars = []
+
+    with torch.no_grad():
+        for batch_x, batch_y in test_loader:
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
+
+            mu, log_var = model(batch_x)
+
+            all_preds.append(mu.cpu())
+            all_targets.append(batch_y.cpu())
+            all_log_vars.append(log_var.cpu())
+
+    all_preds = torch.cat(all_preds)
+    all_targets = torch.cat(all_targets)
+    all_log_vars = torch.cat(all_log_vars)
+
+    # Compute IC
+    pred_np = all_preds.numpy()
+    target_np = all_targets.numpy()
+
+    pred_centered = pred_np - pred_np.mean()
+    target_centered = target_np - target_np.mean()
+
+    numerator = (pred_centered * target_centered).sum()
+    denominator = (pred_centered ** 2).sum() ** 0.5 * (target_centered ** 2).sum() ** 0.5
+
+    ic = numerator / (denominator + 1e-12)
+
+    # RMSE
+    rmse = float(((all_preds - all_targets) ** 2).mean().sqrt())
+
+    # Directional Accuracy
+    pred_dir = torch.sign(all_preds)
+    target_dir = torch.sign(all_targets)
+    mask = (target_dir != 0) & (pred_dir != 0)
+    da = float((pred_dir[mask] == target_dir[mask]).float().mean()) if mask.sum() > 0 else 0.5
+
+    metrics = {
+        'ic': float(ic),
+        'rmse': rmse,
+        'directional_accuracy': da
+    }
+
+    return metrics, all_preds, all_targets, all_log_vars
+
+
+# ============================================================================
+# CELL 6: MAIN COMPARISON FUNCTION
+# ============================================================================
+# Run full comparison study
+
+def run_comparison(
+    dataset: str = 'IXIC',
     window: int = 5,
     batch_size: int = 32,
     epochs: int = 50,
     learning_rate: float = 0.001,
     hidden_dim: int = 64,
     early_stop_patience: int = 10,
-    # Model hyperparameters (use best from tuning)
+    # Model hyperparameters
     R: int = 3,
     K: int = 3,
     d_e: int = 10,
@@ -537,175 +656,244 @@ def run_comparison_study(
     mc_train: int = 3,
     mc_eval: int = 20,
     verbose: bool = True,
-    log_base_dir: str = 'logs',
     device: str = 'cpu'
-) -> Dict:
+):
     """
-    Run comprehensive Bayesian vs Non-Bayesian comparison
+    Run Bayesian vs Non-Bayesian comparison on a single dataset
 
     Returns:
-        results: Dictionary with all metrics and analyses
+        results: Dict with metrics for both models
     """
 
     print("="*80)
-    print("BAYESIAN VS NON-BAYESIAN MAMBA-BGNN COMPARISON")
+    print(f"BAYESIAN VS NON-BAYESIAN COMPARISON - {dataset}")
     print("="*80)
-    print(f"Datasets: {datasets}")
-    print(f"Epochs: {epochs}, LR: {learning_rate}")
-    print(f"Model: R={R}, K={K}, heads={heads}, d_e={d_e}")
-    print(f"Bayesian: mc_train={mc_train}, mc_eval={mc_eval}")
+    print(f"Parameters: R={R}, K={K}, heads={heads}, mc_train={mc_train}, mc_eval={mc_eval}")
     print("="*80)
 
-    all_results = {}
+    # Load data
+    print("\n[1/5] Loading data...")
+    num_features, train_loader, val_loader, test_loader = load_data(dataset, window, batch_size)
+    print(f"✓ Features: {num_features}, Train: {len(train_loader.dataset)}, "
+          f"Val: {len(val_loader.dataset)}, Test: {len(test_loader.dataset)}")
 
-    for dataset in datasets:
-        print(f"\n{'='*80}")
-        print(f"DATASET: {dataset}")
-        print(f"{'='*80}")
-
-        # Load data
-        print("\nLoading data...")
-        num_features, train_loader, val_loader, test_loader = load_data(
-            dataset, window, batch_size
-        )
-        print(f"✓ Features: {num_features}, Train: {len(train_loader.dataset)}, "
-              f"Val: {len(val_loader.dataset)}, Test: {len(test_loader.dataset)}")
-
-        # Model arguments
-        args = ModelArgs(
-            d_model=num_features,
-            seq_len=window,
-            d_proj_E=hidden_dim,
-            d_proj_H=hidden_dim,
-            d_proj_U=hidden_dim // 2,
-            d_state=hidden_dim
-        )
-
-        # Create models
-        print("\nCreating models...")
-        model_nonbayesian = BIMamba_MAGAC_NonBayesian(args, R, K, d_e, heads)
-        model_bayesian = BIMamba_MAGAC_Bayesian(
-            args, R, K, d_e, heads, mc_train, mc_eval, 0.1, 0.2
-        )
-
-        # Initialize weights
-        for model in [model_nonbayesian, model_bayesian]:
-            for p in model.parameters():
-                if p.dim() > 1:
-                    nn.init.xavier_uniform_(p)
-
-        models_dict = {
-            f'{dataset}_NonBayesian': model_nonbayesian,
-            f'{dataset}_Bayesian': model_bayesian
-        }
-
-        # Training config
-        config = {
-            'epochs': epochs,
-            'lr': learning_rate,
-            'loss_type': 'nll',
-            'patience': early_stop_patience,
-            'optimizer_fn': lambda params, lr: torch.optim.Adam(params, lr=lr),
-            'scheduler_fn': None
-        }
-
-        # Train models
-        print("\nTraining models...")
-        results = train_models(
-            models_dict=models_dict,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            test_loader=test_loader,
-            dataset=dataset,
-            config=config,
-            log_base_dir=log_base_dir,
-            study_name='bayesian_vs_nonbayesian',
-            verbose=verbose,
-            device=device
-        )
-
-        all_results[dataset] = results
-
-        # Perform advanced analysis
-        print("\nPerforming market regime analysis...")
-        regime_results = regime_analysis(
-            model_bayesian=models_dict[f'{dataset}_Bayesian'],
-            model_nonbayesian=models_dict[f'{dataset}_NonBayesian'],
-            test_loader=test_loader,
-            device=device
-        )
-        all_results[dataset]['regime_analysis'] = regime_results
-
-        # Financial metrics
-        print("\nComputing financial metrics...")
-        fin_metrics = compute_financial_metrics(
-            models_dict=models_dict,
-            test_loader=test_loader,
-            device=device
-        )
-        all_results[dataset]['financial_metrics'] = fin_metrics
-
-    # Cross-dataset comparison
-    print("\n" + "="*80)
-    print("CROSS-DATASET COMPARISON")
-    print("="*80)
-
-    comparison = compare_bayesian_vs_nonbayesian(all_results)
-
-    # Save results
-    output_dir = os.path.join(log_base_dir, 'bayesian_vs_nonbayesian')
-    os.makedirs(output_dir, exist_ok=True)
-
-    with open(os.path.join(output_dir, 'comparison_results.json'), 'w') as f:
-        json.dump(comparison, f, indent=2, default=str)
-
-    # Generate plots
-    print("\nGenerating comparison plots...")
-    plot_bayesian_vs_nonbayesian_comparison(
-        all_results,
-        output_dir=output_dir
+    # Model arguments
+    args = ModelArgs(
+        d_model=num_features,
+        seq_len=window,
+        d_proj_E=hidden_dim,
+        d_proj_H=hidden_dim,
+        d_proj_U=hidden_dim // 2,
+        d_state=hidden_dim
     )
 
+    results = {}
+
+    # Train Non-Bayesian
+    print("\n[2/5] Training Non-Bayesian model...")
+    model_nonbayesian = BIMamba_MAGAC_NonBayesian(args, R, K, d_e, heads)
+
+    # Initialize weights
+    for p in model_nonbayesian.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+
+    model_nonbayesian = train_single_model(
+        model_nonbayesian, train_loader, val_loader,
+        epochs, learning_rate, early_stop_patience, device, verbose
+    )
+
+    print("✓ Non-Bayesian training completed")
+
+    # Train Bayesian
+    print("\n[3/5] Training Bayesian model...")
+    model_bayesian = BIMamba_MAGAC_Bayesian(
+        args, R, K, d_e, heads, mc_train, mc_eval, 0.1, 0.2
+    )
+
+    # Initialize weights
+    for p in model_bayesian.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+
+    model_bayesian = train_single_model(
+        model_bayesian, train_loader, val_loader,
+        epochs, learning_rate, early_stop_patience, device, verbose
+    )
+
+    print("✓ Bayesian training completed")
+
+    # Evaluate Non-Bayesian
+    print("\n[4/5] Evaluating Non-Bayesian model...")
+    metrics_nb, preds_nb, targets_nb, logvars_nb = evaluate_model(
+        model_nonbayesian, test_loader, device
+    )
+    results['NonBayesian'] = metrics_nb
+    print(f"✓ Non-Bayesian: IC={metrics_nb['ic']:.6f}, RMSE={metrics_nb['rmse']:.6f}, DA={metrics_nb['directional_accuracy']:.4f}")
+
+    # Evaluate Bayesian
+    print("\n[5/5] Evaluating Bayesian model...")
+    metrics_b, preds_b, targets_b, logvars_b = evaluate_model(
+        model_bayesian, test_loader, device
+    )
+    results['Bayesian'] = metrics_b
+    print(f"✓ Bayesian: IC={metrics_b['ic']:.6f}, RMSE={metrics_b['rmse']:.6f}, DA={metrics_b['directional_accuracy']:.4f}")
+
+    # Comparison
     print("\n" + "="*80)
-    print("✓ COMPARISON STUDY COMPLETED!")
+    print("COMPARISON SUMMARY")
     print("="*80)
-    print(f"Results saved to: {output_dir}")
-    print("\nKey Findings:")
-    print("  - Bayesian models provide uncertainty quantification")
-    print("  - Non-Bayesian models are faster (no MC sampling)")
-    print("  - Regime analysis shows performance in different market conditions")
+    print(f"{'Metric':<25} {'Non-Bayesian':>15} {'Bayesian':>15} {'Improvement':>12}")
+    print("-"*70)
+
+    for metric in ['ic', 'rmse', 'directional_accuracy']:
+        nb_val = metrics_nb[metric]
+        b_val = metrics_b[metric]
+
+        if abs(nb_val) > 1e-8:
+            improvement = (b_val - nb_val) / abs(nb_val) * 100
+        else:
+            improvement = 0.0
+
+        print(f"{metric:<25} {nb_val:>15.6f} {b_val:>15.6f} {improvement:>11.2f}%")
+
     print("="*80)
 
-    return all_results
+    # Save results
+    output_dir = f'logs/bayesian_vs_nonbayesian/{dataset}'
+    os.makedirs(output_dir, exist_ok=True)
+
+    import pandas as pd
+
+    # Save predictions
+    df_nb = pd.DataFrame({
+        'y': targets_nb.numpy(),
+        'mu': preds_nb.numpy(),
+        'log_var': logvars_nb.numpy(),
+        'sigma': torch.exp(0.5 * logvars_nb).numpy()
+    })
+    df_nb.to_csv(os.path.join(output_dir, 'NonBayesian_predictions.csv'), index=False)
+
+    df_b = pd.DataFrame({
+        'y': targets_b.numpy(),
+        'mu': preds_b.numpy(),
+        'log_var': logvars_b.numpy(),
+        'sigma': torch.exp(0.5 * logvars_b).numpy()
+    })
+    df_b.to_csv(os.path.join(output_dir, 'Bayesian_predictions.csv'), index=False)
+
+    # Save metrics
+    with open(os.path.join(output_dir, 'comparison_results.json'), 'w') as f:
+        json.dump(results, f, indent=2)
+
+    print(f"\n✓ Results saved to: {output_dir}")
+
+    return results
 
 
 # ============================================================================
-# Example Usage
+# CELL 7: EXAMPLE USAGE (Run in Notebook or as Script)
 # ============================================================================
 
 if __name__ == "__main__":
-    import argparse
+    """
+    Example usage - can be run in notebook cells or as script
 
-    parser = argparse.ArgumentParser(description='Bayesian vs Non-Bayesian comparison')
-    parser.add_argument('--datasets', nargs='+', default=['IXIC', 'DJI', 'NYSE'],
-                       help='Datasets to run on')
-    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
-                       help='Device to use')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    In Notebook:
+        1. Run CELL 1-6 first
+        2. Then run one of the modes below
 
-    args = parser.parse_args()
+    As Script:
+        python models/run_bayesian_vs_nonbayesian.py
+    """
 
-    print(f"Using device: {args.device}")
+    # Check device
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Using device: {device}")
 
-    results = run_comparison_study(
-        datasets=args.datasets,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        learning_rate=args.lr,
-        device=args.device,
-        verbose=True
+    # ============ MODE 1: QUICK TEST (Single Dataset, Reduced Epochs) ============
+    """
+    print("\n" + "="*80)
+    print("MODE 1: QUICK TEST")
+    print("="*80)
+
+    results = run_comparison(
+        dataset='IXIC',
+        epochs=30,           # Reduced epochs for quick test
+        batch_size=32,
+        learning_rate=0.001,
+        hidden_dim=64,
+        R=3,                 # Best from tuning
+        K=3,                 # Best from tuning
+        heads=4,             # Best from tuning
+        mc_train=3,
+        mc_eval=20,
+        verbose=True,
+        device=device
+    )
+    """
+
+    # ============ MODE 2: SINGLE DATASET (Full Training) ============
+    print("\n" + "="*80)
+    print("MODE 2: SINGLE DATASET FULL TRAINING")
+    print("="*80)
+
+    results = run_comparison(
+        dataset='IXIC',
+        epochs=50,
+        batch_size=32,
+        learning_rate=0.001,
+        hidden_dim=64,
+        R=3,
+        K=3,
+        heads=4,
+        mc_train=3,
+        mc_eval=20,
+        verbose=True,
+        device=device
     )
 
-    print("\n✓ Done! Check logs/bayesian_vs_nonbayesian/ for results")
+    # ============ MODE 3: MULTI-DATASET (All 3 Datasets) ============
+    """
+    print("\n" + "="*80)
+    print("MODE 3: MULTI-DATASET COMPARISON")
+    print("="*80)
+
+    datasets = ['IXIC', 'DJI', 'NYSE']
+    all_results = {}
+
+    for dataset in datasets:
+        print(f"\n>>> Processing {dataset}...")
+        results = run_comparison(
+            dataset=dataset,
+            epochs=50,
+            batch_size=32,
+            learning_rate=0.001,
+            R=3, K=3, heads=4,
+            mc_train=3, mc_eval=20,
+            verbose=True,
+            device=device
+        )
+        all_results[dataset] = results
+
+    # Cross-dataset summary
+    print("\n" + "="*80)
+    print("CROSS-DATASET SUMMARY")
+    print("="*80)
+
+    avg_ic_nb = sum(all_results[ds]['NonBayesian']['ic'] for ds in datasets) / len(datasets)
+    avg_ic_b = sum(all_results[ds]['Bayesian']['ic'] for ds in datasets) / len(datasets)
+
+    print(f"Average IC:")
+    print(f"  Non-Bayesian: {avg_ic_nb:.6f}")
+    print(f"  Bayesian:     {avg_ic_b:.6f}")
+    print(f"  Improvement:  {(avg_ic_b - avg_ic_nb) / abs(avg_ic_nb) * 100:+.2f}%")
+    """
+
+    print("\n" + "="*80)
+    print("✓ COMPARISON COMPLETED!")
+    print("="*80)
+    print("\nResults saved to: logs/bayesian_vs_nonbayesian/")
+    print("\nTo generate plots, run:")
+    print("  from utils.result_plot import plot_bayesian_vs_nonbayesian_comparison")
+    print("  plot_bayesian_vs_nonbayesian_comparison(results, 'logs/comparison')")
