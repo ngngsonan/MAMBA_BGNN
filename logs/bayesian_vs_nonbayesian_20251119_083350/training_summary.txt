@@ -1,0 +1,1131 @@
+Using device: cuda
+
+================================================================================
+MODE 3: MULTI-DATASET COMPARISON
+================================================================================
+================================================================================
+MULTI-DATASET BAYESIAN VS NON-BAYESIAN COMPARISON
+================================================================================
+Study: bayesian_vs_nonbayesian_20251119_083350
+Datasets: IXIC, DJI, NYSE
+Models: BIMamba-MAGAC (Bayesian vs Non-Bayesian)
+================================================================================
+
+================================================================================
+Processing IXIC...
+================================================================================
+================================================================================
+BAYESIAN VS NON-BAYESIAN COMPARISON - IXIC
+================================================================================
+Study: bayesian_vs_nonbayesian_20251119_083350
+Architecture: R=3, K=3, heads=4, mc_train=3, mc_eval=15
+Loss: Non-Bayesian=Huber, Bayesian=GaussianNLL
+Training: LR=0.001, Epochs=500, Grad Clip=True (max_norm=5.0)
+Scheduler: MultiStepLR (milestones=[40, 60, 80], gamma=0.1)
+================================================================================
+
+Loading data...
+ Data shape: (3470, 82)
+NaN distribution:
+ Price       0
+Vol.        0
+weekday     0
+mom         0
+mom1        0
+           ..
+DE1        23
+DE2        28
+DE4        28
+DE5        28
+DE6        28
+Length: 82, dtype: int64
+ FILLNA BY MEDIAN - Data shape: (3470, 82)
+✓ Data loaded: 81 features
+  Train: 2772 samples
+  Val:   173 samples
+  Test:  520 samples
+
+Creating models...
+
+================================================================================
+TRAINING NON-BAYESIAN MODEL
+================================================================================
+Loss function: Deterministic (auto → Huber for MAMBA variants)
+Reason: Fixed variance, no MC sampling
+Gradient clipping: ENABLED (max_norm=5.0) - prevents gradient instability
+LR scheduler: MultiStepLR - improves convergence
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_083350 TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: BIMamba-MAGAC_NonBayesian
+Config: {'epochs': 500, 'lr': 0.001, 'loss_type': 'auto', 'patience': 10, 'optimizer_fn': <function run_comparison.<locals>.<lambda> at 0x7f6329d6d1c0>, 'scheduler_fn': None, 'grad_clip': True, 'max_grad_norm': 5.0}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: BIMamba-MAGAC_NonBayesian
+================================================================================
+✓ New best model (Val Loss: 0.000070)
+✓ New best model (Val Loss: 0.000060)
+✓ New best model (Val Loss: 0.000045)
+✓ New best model (Val Loss: 0.000042)
+Epoch 5/500 - Train: 0.000094, Val: 0.000028, RMSE: 0.007636, IC: 0.7816, Time: 4.70s
+✓ New best model (Val Loss: 0.000028)
+✓ New best model (Val Loss: 0.000014)
+✓ New best model (Val Loss: 0.000010)
+Epoch 10/500 - Train: 0.000075, Val: 0.000047, RMSE: 0.009443, IC: 0.9402, Time: 4.08s
+✓ New best model (Val Loss: 0.000009)
+✓ New best model (Val Loss: 0.000006)
+Epoch 15/500 - Train: 0.000035, Val: 0.000007, RMSE: 0.003767, IC: 0.9673, Time: 4.08s
+✓ New best model (Val Loss: 0.000005)
+✓ New best model (Val Loss: 0.000003)
+✓ New best model (Val Loss: 0.000003)
+✓ New best model (Val Loss: 0.000003)
+Epoch 20/500 - Train: 0.000009, Val: 0.000002, RMSE: 0.001993, IC: 0.9859, Time: 4.12s
+✓ New best model (Val Loss: 0.000002)
+✓ New best model (Val Loss: 0.000001)
+Epoch 25/500 - Train: 0.000013, Val: 0.000001, RMSE: 0.001575, IC: 0.9899, Time: 4.28s
+✓ New best model (Val Loss: 0.000001)
+Epoch 30/500 - Train: 0.000014, Val: 0.000006, RMSE: 0.003477, IC: 0.9882, Time: 4.75s
+Epoch 35/500 - Train: 0.000017, Val: 0.000005, RMSE: 0.003248, IC: 0.9674, Time: 4.41s
+Early stopping at epoch 35
+
+⏱️  Training completed in 152.84s
+   Average: 4.36s/epoch
+
+[BIMamba-MAGAC_NonBayesian] Test Results:
+  RMSE: 0.003297
+  MAE:  0.002556
+  IC (single-asset):  0.985173
+  RIC (single-asset): 0.986143
+  Dir Acc: 0.921154
+  Sharpe: 16.8672
+  Max DD: 0.0078
+  ⏱️  Avg time: 4.36s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC/BIMamba-MAGAC_NonBayesian/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+                    Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_NonBayesian 0.003297 0.002556 0.985173 0.986143 0.921154 16.8672 0.0078 365.8718 0.052164               4.36          152.8
+
+================================================================================
+✓ Results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC_summary_20251119_083356
+  - Comparison table: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC_summary_20251119_083356/bayesian_vs_nonbayesian_20251119_083350_comparison.csv
+  - Summary report: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC_summary_20251119_083356/bayesian_vs_nonbayesian_20251119_083350_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+TRAINING BAYESIAN MODEL
+================================================================================
+Loss function: GaussianNLL
+Reason: Optimizes both mean and variance from MC sampling
+Gradient clipping: ENABLED (max_norm=5.0) - CRITICAL for Bayesian!
+  → Stabilizes high-variance gradients from MC sampling
+  → Prevents explosion in variance term of GaussianNLL
+  → Controls gradients from stochastic graph (DropEdge, MC Dropout)
+LR scheduler: MultiStepLR - ensures stable convergence
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_083350 TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: BIMamba-MAGAC_Bayesian
+Config: {'epochs': 500, 'lr': 0.001, 'loss_type': 'nll', 'patience': 10, 'optimizer_fn': <function run_comparison.<locals>.<lambda> at 0x7f6329d6d120>, 'scheduler_fn': None, 'grad_clip': True, 'max_grad_norm': 5.0}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: BIMamba-MAGAC_Bayesian
+================================================================================
+✓ New best model (Val Loss: -3.463434)
+✓ New best model (Val Loss: -4.405643)
+✓ New best model (Val Loss: -4.689719)
+Epoch 5/500 - Train: 16.117067, Val: -4.882147, RMSE: 0.003467, IC: 0.9586, Time: 5.69s
+✓ New best model (Val Loss: -4.882147)
+✓ New best model (Val Loss: -4.942252)
+✓ New best model (Val Loss: -5.043561)
+Epoch 10/500 - Train: -1.547602, Val: -4.947801, RMSE: 0.003711, IC: 0.9833, Time: 6.35s
+Epoch 15/500 - Train: -2.100873, Val: -5.011689, RMSE: 0.003091, IC: 0.9888, Time: 5.59s
+✓ New best model (Val Loss: -5.079950)
+Epoch 20/500 - Train: -3.308154, Val: -4.399320, RMSE: 0.007261, IC: 0.9625, Time: 6.16s
+Epoch 25/500 - Train: -4.665879, Val: -4.898297, RMSE: 0.004216, IC: 0.9893, Time: 5.61s
+✓ New best model (Val Loss: -5.129356)
+✓ New best model (Val Loss: -5.177813)
+Epoch 30/500 - Train: -5.305022, Val: -5.105983, RMSE: 0.002017, IC: 0.9881, Time: 6.27s
+Epoch 35/500 - Train: -5.074702, Val: -5.123820, RMSE: 0.002395, IC: 0.9883, Time: 5.71s
+Early stopping at epoch 39
+
+⏱️  Training completed in 233.04s
+   Average: 5.97s/epoch
+
+[BIMamba-MAGAC_Bayesian] Test Results:
+  RMSE: 0.004737
+  MAE:  0.003859
+  IC (single-asset):  0.984550
+  RIC (single-asset): 0.980494
+  Dir Acc: 0.888462
+  Sharpe: 16.1189
+  Max DD: 0.0102
+  ⏱️  Avg time: 5.97s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC/BIMamba-MAGAC_Bayesian/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+                 Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_Bayesian 0.004737 0.003859 0.984550 0.980494 0.888462 16.1189 0.0102 271.6907 0.002707               5.97          233.0
+
+================================================================================
+✓ Results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC_summary_20251119_083630
+  - Comparison table: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC_summary_20251119_083630/bayesian_vs_nonbayesian_20251119_083350_comparison.csv
+  - Summary report: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC_summary_20251119_083630/bayesian_vs_nonbayesian_20251119_083350_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+ADVANCED ANALYSIS
+================================================================================
+
+[1/4] Computing financial metrics...
+  Sharpe Ratio - NB: 9.5568, B: 9.4272
+  Max Drawdown - NB: -0.0000, B: -0.0000
+  RIC - NB: 0.9861, B: 0.9805
+
+[2/4] Computing probabilistic metrics...
+  CRPS - NB: -0.252940, B: -0.006222
+
+[3/4] Computing calibration metrics...
+  Mean Calibration Error - NB: 0.1267, B: 0.1074
+  Coverage@95% - NB: 1.0000, B: 0.9981
+
+[4/4] Analyzing market regimes...
+  Low volatility:    100.0%
+  Medium volatility: 0.0%
+  High volatility:   0.0%
+
+  Regime Performance:
+    low_volatility       - IC: NB=0.9852, B=0.9845
+
+================================================================================
+UNCERTAINTY-BASED ANALYSIS (Exploiting Bayesian Mean + Variance)
+================================================================================
+
+[1/5] Uncertainty-weighted IC...
+  UW-IC - NB: 0.9852, B: 0.9845
+  → Rewards confidence when correct
+
+[2/5] Risk-adjusted returns (position sizing by uncertainty)...
+  Base Sharpe - NB: 9.5568, B: 9.4272
+  Adjusted Sharpe - NB: 9.5568, B: 9.4276
+  Improvement - NB: 0.00%, B: 0.00%
+  → Lower uncertainty = larger position size
+
+[3/5] Sharpness (average uncertainty)...
+  Sharpness - NB: 0.223130, B: 0.005586
+  → Lower is better (more confident) IF calibrated
+
+[4/5] Prediction interval metrics...
+  95% PI Width - NB: 0.8747, B: 0.0219
+  95% Coverage - NB: 1.0000, B: 0.9885
+
+[5/5] Confidence-accuracy relationship...
+  Correlation (Confidence vs Error):
+    NB: nan (p=nan)
+    B:  -0.1944 (p=0.0000)
+  → Expect negative correlation (high confidence = low error)
+
+--------------------------------------------------------------------------------
+UNCERTAINTY CONTRIBUTION ANALYSIS
+--------------------------------------------------------------------------------
+
+When Bayesian is HIGHLY uncertain (top 25%):
+  Bayesian error:     0.004597
+  Non-Bayesian error: 0.002696
+  Mean sigma:         0.005842
+
+When Bayesian is CONFIDENT (bottom 25%):
+  Bayesian error:     0.002837
+  Non-Bayesian error: 0.001842
+  Mean sigma:         0.005421
+
+Does uncertainty identify difficult samples?
+  Correlation (Bayesian σ vs Non-Bayesian error): 0.1430
+  p-value: 1.0759e-03
+  → Positive correlation means Bayesian uncertainty identifies samples where Non-Bayesian struggles
+
+✓ Uncertainty analysis saved to: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC/uncertainty_analysis.json
+
+================================================================================
+COMPREHENSIVE COMPARISON SUMMARY
+================================================================================
+Metric                       Non-Bayesian        Bayesian  Improvement
+--------------------------------------------------------------------------------
+ic                               0.985173        0.984550       -0.06%
+ric                              0.986143        0.980494       -0.57%
+rmse                             0.003297        0.004737      -43.65%
+sharpe_ratio                     9.556817        9.427224       -1.36%
+max_drawdown                    -0.000013       -0.000016       26.74%
+crps                            -0.252940       -0.006222      -97.54%
+================================================================================
+
+✓ Comprehensive results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC
+
+================================================================================
+Processing DJI...
+================================================================================
+================================================================================
+BAYESIAN VS NON-BAYESIAN COMPARISON - DJI
+================================================================================
+Study: bayesian_vs_nonbayesian_20251119_083350
+Architecture: R=3, K=3, heads=4, mc_train=3, mc_eval=15
+Loss: Non-Bayesian=Huber, Bayesian=GaussianNLL
+Training: LR=0.001, Epochs=500, Grad Clip=True (max_norm=5.0)
+Scheduler: MultiStepLR (milestones=[40, 60, 80], gamma=0.1)
+================================================================================
+
+Loading data...
+ Data shape: (3470, 82)
+NaN distribution:
+ Price       0
+Vol.        0
+weekday     0
+mom         0
+mom1        0
+           ..
+DE1        23
+DE2        28
+DE4        28
+DE5        28
+DE6        28
+Length: 82, dtype: int64
+ FILLNA BY MEDIAN - Data shape: (3470, 82)
+✓ Data loaded: 81 features
+  Train: 2772 samples
+  Val:   173 samples
+  Test:  520 samples
+
+Creating models...
+/tmp/ipython-input-173138017.py:865: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, p_value = spearmanr(confidence, errors)
+
+================================================================================
+TRAINING NON-BAYESIAN MODEL
+================================================================================
+Loss function: Deterministic (auto → Huber for MAMBA variants)
+Reason: Fixed variance, no MC sampling
+Gradient clipping: ENABLED (max_norm=5.0) - prevents gradient instability
+LR scheduler: MultiStepLR - improves convergence
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_083350 TRAINING - Unified Pipeline
+================================================================================
+Dataset: DJI
+Models: BIMamba-MAGAC_NonBayesian
+Config: {'epochs': 500, 'lr': 0.001, 'loss_type': 'auto', 'patience': 10, 'optimizer_fn': <function run_comparison.<locals>.<lambda> at 0x7f63413fe160>, 'scheduler_fn': None, 'grad_clip': True, 'max_grad_norm': 5.0}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: BIMamba-MAGAC_NonBayesian
+================================================================================
+✓ New best model (Val Loss: 0.000039)
+✓ New best model (Val Loss: 0.000027)
+Epoch 5/500 - Train: 0.000097, Val: 0.000031, RMSE: 0.008000, IC: 0.4158, Time: 4.40s
+✓ New best model (Val Loss: 0.000023)
+✓ New best model (Val Loss: 0.000021)
+Epoch 10/500 - Train: 0.000202, Val: 0.000030, RMSE: 0.007647, IC: 0.6108, Time: 4.43s
+Epoch 15/500 - Train: 0.000061, Val: 0.000015, RMSE: 0.005472, IC: 0.6939, Time: 4.41s
+✓ New best model (Val Loss: 0.000015)
+✓ New best model (Val Loss: 0.000013)
+✓ New best model (Val Loss: 0.000011)
+✓ New best model (Val Loss: 0.000009)
+✓ New best model (Val Loss: 0.000005)
+Epoch 20/500 - Train: 0.000017, Val: 0.000004, RMSE: 0.002764, IC: 0.9498, Time: 4.33s
+✓ New best model (Val Loss: 0.000004)
+✓ New best model (Val Loss: 0.000003)
+Epoch 25/500 - Train: 0.000015, Val: 0.000006, RMSE: 0.003507, IC: 0.9609, Time: 4.36s
+Epoch 30/500 - Train: 0.000007, Val: 0.000005, RMSE: 0.003208, IC: 0.9771, Time: 4.52s
+Early stopping at epoch 31
+
+⏱️  Training completed in 144.41s
+   Average: 4.66s/epoch
+
+[BIMamba-MAGAC_NonBayesian] Test Results:
+  RMSE: 0.003283
+  MAE:  0.002645
+  IC (single-asset):  0.953523
+  RIC (single-asset): 0.932247
+  Dir Acc: 0.875000
+  Sharpe: 12.9025
+  Max DD: 0.0097
+  ⏱️  Avg time: 4.66s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/bayesian_vs_nonbayesian_20251119_083350/DJI/BIMamba-MAGAC_NonBayesian/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+                    Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_NonBayesian 0.003283 0.002645 0.953523 0.932247 0.875000 12.9025 0.0097 157.7066 0.052164               4.66          144.4
+
+================================================================================
+✓ Results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/DJI_summary_20251119_084025
+  - Comparison table: logs/bayesian_vs_nonbayesian_20251119_083350/DJI_summary_20251119_084025/bayesian_vs_nonbayesian_20251119_083350_comparison.csv
+  - Summary report: logs/bayesian_vs_nonbayesian_20251119_083350/DJI_summary_20251119_084025/bayesian_vs_nonbayesian_20251119_083350_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../DJI_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../DJI_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../DJI_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+TRAINING BAYESIAN MODEL
+================================================================================
+Loss function: GaussianNLL
+Reason: Optimizes both mean and variance from MC sampling
+Gradient clipping: ENABLED (max_norm=5.0) - CRITICAL for Bayesian!
+  → Stabilizes high-variance gradients from MC sampling
+  → Prevents explosion in variance term of GaussianNLL
+  → Controls gradients from stochastic graph (DropEdge, MC Dropout)
+LR scheduler: MultiStepLR - ensures stable convergence
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_083350 TRAINING - Unified Pipeline
+================================================================================
+Dataset: DJI
+Models: BIMamba-MAGAC_Bayesian
+Config: {'epochs': 500, 'lr': 0.001, 'loss_type': 'nll', 'patience': 10, 'optimizer_fn': <function run_comparison.<locals>.<lambda> at 0x7f62cfe4c5e0>, 'scheduler_fn': None, 'grad_clip': True, 'max_grad_norm': 5.0}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: BIMamba-MAGAC_Bayesian
+================================================================================
+✓ New best model (Val Loss: -4.363896)
+✓ New best model (Val Loss: -4.437066)
+✓ New best model (Val Loss: -4.641143)
+Epoch 5/500 - Train: 7.799300, Val: -4.745241, RMSE: 0.004497, IC: 0.8134, Time: 6.38s
+✓ New best model (Val Loss: -4.745241)
+Epoch 10/500 - Train: 2.282988, Val: -4.691577, RMSE: 0.004222, IC: 0.9626, Time: 6.71s
+✓ New best model (Val Loss: -4.797647)
+Epoch 15/500 - Train: -1.768697, Val: -4.522275, RMSE: 0.006180, IC: 0.9795, Time: 5.95s
+Epoch 20/500 - Train: -3.056668, Val: -4.603992, RMSE: 0.005269, IC: 0.9407, Time: 6.64s
+✓ New best model (Val Loss: -4.819424)
+Epoch 25/500 - Train: -3.907804, Val: -4.823887, RMSE: 0.002594, IC: 0.9636, Time: 6.43s
+✓ New best model (Val Loss: -4.823887)
+✓ New best model (Val Loss: -4.826906)
+Epoch 30/500 - Train: -5.312383, Val: -4.842997, RMSE: 0.002434, IC: 0.9597, Time: 6.03s
+✓ New best model (Val Loss: -4.842997)
+✓ New best model (Val Loss: -4.853635)
+Epoch 35/500 - Train: -5.490252, Val: -4.774187, RMSE: 0.002836, IC: 0.9570, Time: 6.68s
+✓ New best model (Val Loss: -4.881976)
+Epoch 40/500 - Train: -5.954869, Val: -4.939363, RMSE: 0.002065, IC: 0.9664, Time: 6.27s
+✓ New best model (Val Loss: -4.939363)
+✓ New best model (Val Loss: -4.951851)
+✓ New best model (Val Loss: -4.991941)
+Epoch 45/500 - Train: -5.588398, Val: -5.037990, RMSE: 0.002043, IC: 0.9794, Time: 6.01s
+✓ New best model (Val Loss: -5.037990)
+✓ New best model (Val Loss: -5.061259)
+✓ New best model (Val Loss: -5.070928)
+Epoch 50/500 - Train: -5.701559, Val: -5.095178, RMSE: 0.001511, IC: 0.9824, Time: 6.73s
+✓ New best model (Val Loss: -5.095178)
+✓ New best model (Val Loss: -5.100738)
+✓ New best model (Val Loss: -5.143111)
+✓ New best model (Val Loss: -5.146740)
+✓ New best model (Val Loss: -5.184145)
+Epoch 55/500 - Train: -5.908511, Val: -5.171832, RMSE: 0.001052, IC: 0.9937, Time: 6.15s
+✓ New best model (Val Loss: -5.205436)
+Epoch 60/500 - Train: -5.367736, Val: -5.117214, RMSE: 0.003079, IC: 0.9637, Time: 6.08s
+✓ New best model (Val Loss: -5.325848)
+Epoch 65/500 - Train: -5.482429, Val: -5.364195, RMSE: 0.001299, IC: 0.9905, Time: 6.66s
+✓ New best model (Val Loss: -5.364195)
+✓ New best model (Val Loss: -5.405321)
+✓ New best model (Val Loss: -5.484537)
+✓ New best model (Val Loss: -5.504148)
+Epoch 70/500 - Train: -6.240915, Val: -5.456350, RMSE: 0.001915, IC: 0.9863, Time: 5.97s
+✓ New best model (Val Loss: -5.555316)
+Epoch 75/500 - Train: -5.775424, Val: -5.624731, RMSE: 0.001101, IC: 0.9940, Time: 5.98s
+✓ New best model (Val Loss: -5.624731)
+✓ New best model (Val Loss: -5.646234)
+✓ New best model (Val Loss: -5.666064)
+Epoch 80/500 - Train: -5.934751, Val: -5.651834, RMSE: 0.001322, IC: 0.9951, Time: 6.61s
+Epoch 85/500 - Train: -6.313285, Val: -5.779213, RMSE: 0.000644, IC: 0.9970, Time: 5.95s
+✓ New best model (Val Loss: -5.779213)
+✓ New best model (Val Loss: -5.862788)
+Epoch 90/500 - Train: -5.844744, Val: -5.816956, RMSE: 0.001140, IC: 0.9898, Time: 6.44s
+✓ New best model (Val Loss: -5.874956)
+Epoch 95/500 - Train: -4.798593, Val: -5.648309, RMSE: 0.002044, IC: 0.9961, Time: 6.66s
+Epoch 100/500 - Train: -6.110628, Val: -6.000403, RMSE: 0.000632, IC: 0.9967, Time: 5.99s
+✓ New best model (Val Loss: -6.000403)
+Epoch 105/500 - Train: -6.265046, Val: -5.256808, RMSE: 0.002894, IC: 0.9974, Time: 6.66s
+✓ New best model (Val Loss: -6.071565)
+Epoch 110/500 - Train: -6.027350, Val: -5.960722, RMSE: 0.001307, IC: 0.9962, Time: 6.68s
+Epoch 115/500 - Train: -6.256999, Val: -6.010017, RMSE: 0.001129, IC: 0.9978, Time: 6.01s
+✓ New best model (Val Loss: -6.103189)
+✓ New best model (Val Loss: -6.141857)
+Epoch 120/500 - Train: -6.507868, Val: -6.056460, RMSE: 0.001016, IC: 0.9976, Time: 6.56s
+Epoch 125/500 - Train: -6.512270, Val: -5.866170, RMSE: 0.001624, IC: 0.9970, Time: 6.53s
+✓ New best model (Val Loss: -6.142938)
+✓ New best model (Val Loss: -6.156625)
+Epoch 130/500 - Train: -6.037128, Val: -6.213904, RMSE: 0.000657, IC: 0.9992, Time: 5.94s
+✓ New best model (Val Loss: -6.213904)
+✓ New best model (Val Loss: -6.219220)
+✓ New best model (Val Loss: -6.269558)
+Epoch 135/500 - Train: -6.581051, Val: -6.221113, RMSE: 0.000894, IC: 0.9973, Time: 6.63s
+Epoch 140/500 - Train: -6.234136, Val: -6.276120, RMSE: 0.000765, IC: 0.9969, Time: 6.07s
+✓ New best model (Val Loss: -6.276120)
+Epoch 145/500 - Train: -6.121525, Val: -5.799728, RMSE: 0.001839, IC: 0.9983, Time: 6.01s
+✓ New best model (Val Loss: -6.324712)
+Epoch 150/500 - Train: -5.912485, Val: -6.106042, RMSE: 0.001283, IC: 0.9969, Time: 6.67s
+Epoch 155/500 - Train: -6.291956, Val: -6.401938, RMSE: 0.000306, IC: 0.9993, Time: 5.99s
+✓ New best model (Val Loss: -6.401938)
+Epoch 160/500 - Train: -6.252516, Val: -6.294506, RMSE: 0.000924, IC: 0.9978, Time: 5.95s
+Epoch 165/500 - Train: -5.866027, Val: -6.052107, RMSE: 0.001362, IC: 0.9977, Time: 6.71s
+Early stopping at epoch 165
+
+⏱️  Training completed in 1045.57s
+   Average: 6.33s/epoch
+
+[BIMamba-MAGAC_Bayesian] Test Results:
+  RMSE: 0.000529
+  MAE:  0.000427
+  IC (single-asset):  0.999014
+  RIC (single-asset): 0.998320
+  Dir Acc: 0.975000
+  Sharpe: 15.5742
+  Max DD: 0.0019
+  ⏱️  Avg time: 6.33s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/bayesian_vs_nonbayesian_20251119_083350/DJI/BIMamba-MAGAC_Bayesian/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+                 Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_Bayesian 0.000529 0.000427 0.999014 0.998320 0.975000 15.5742 0.0019 906.5958 0.000448               6.33         1045.6
+
+================================================================================
+✓ Results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/DJI_summary_20251119_084249
+  - Comparison table: logs/bayesian_vs_nonbayesian_20251119_083350/DJI_summary_20251119_084249/bayesian_vs_nonbayesian_20251119_083350_comparison.csv
+  - Summary report: logs/bayesian_vs_nonbayesian_20251119_083350/DJI_summary_20251119_084249/bayesian_vs_nonbayesian_20251119_083350_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../DJI_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../DJI_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../DJI_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+ADVANCED ANALYSIS
+================================================================================
+
+[1/4] Computing financial metrics...
+  Sharpe Ratio - NB: 8.6401, B: 8.9536
+  Max Drawdown - NB: -0.0000, B: -0.0000
+  RIC - NB: 0.9322, B: 0.9983
+
+[2/4] Computing probabilistic metrics...
+  CRPS - NB: -0.252774, B: -0.001679
+
+[3/4] Computing calibration metrics...
+  Mean Calibration Error - NB: 0.1267, B: 0.1267
+  Coverage@95% - NB: 1.0000, B: 1.0000
+
+[4/4] Analyzing market regimes...
+  Low volatility:    100.0%
+  Medium volatility: 0.0%
+  High volatility:   0.0%
+
+  Regime Performance:
+    low_volatility       - IC: NB=0.9535, B=0.9990
+
+================================================================================
+UNCERTAINTY-BASED ANALYSIS (Exploiting Bayesian Mean + Variance)
+================================================================================
+
+[1/5] Uncertainty-weighted IC...
+  UW-IC - NB: 0.9535, B: 0.9990
+  → Rewards confidence when correct
+
+[2/5] Risk-adjusted returns (position sizing by uncertainty)...
+  Base Sharpe - NB: 8.6401, B: 8.9536
+  Adjusted Sharpe - NB: 8.6401, B: 8.9537
+  Improvement - NB: 0.00%, B: 0.00%
+  → Lower uncertainty = larger position size
+
+[3/5] Sharpness (average uncertainty)...
+  Sharpness - NB: 0.223130, B: 0.001633
+  → Lower is better (more confident) IF calibrated
+
+[4/5] Prediction interval metrics...
+  95% PI Width - NB: 0.8747, B: 0.0064
+  95% Coverage - NB: 1.0000, B: 1.0000
+
+[5/5] Confidence-accuracy relationship...
+  Correlation (Confidence vs Error):
+    NB: nan (p=nan)
+    B:  -0.1907 (p=0.0000)
+  → Expect negative correlation (high confidence = low error)
+
+--------------------------------------------------------------------------------
+UNCERTAINTY CONTRIBUTION ANALYSIS
+--------------------------------------------------------------------------------
+
+When Bayesian is HIGHLY uncertain (top 25%):
+  Bayesian error:     0.000511
+  Non-Bayesian error: 0.002653
+  Mean sigma:         0.001731
+
+When Bayesian is CONFIDENT (bottom 25%):
+  Bayesian error:     0.000343
+  Non-Bayesian error: 0.002689
+  Mean sigma:         0.001559
+
+Does uncertainty identify difficult samples?
+  Correlation (Bayesian σ vs Non-Bayesian error): -0.0100
+  p-value: 8.1981e-01
+  → Positive correlation means Bayesian uncertainty identifies samples where Non-Bayesian struggles
+
+✓ Uncertainty analysis saved to: logs/bayesian_vs_nonbayesian_20251119_083350/DJI/uncertainty_analysis.json
+
+================================================================================
+COMPREHENSIVE COMPARISON SUMMARY
+================================================================================
+Metric                       Non-Bayesian        Bayesian  Improvement
+--------------------------------------------------------------------------------
+ic                               0.953523        0.999014        4.77%
+ric                              0.932247        0.998320        7.09%
+rmse                             0.003283        0.000529       83.89%
+sharpe_ratio                     8.640060        8.953631        3.63%
+max_drawdown                    -0.000026       -0.000000      -98.73%
+crps                            -0.252774       -0.001679      -99.34%
+================================================================================
+
+✓ Comprehensive results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/DJI
+
+================================================================================
+Processing NYSE...
+================================================================================
+================================================================================
+BAYESIAN VS NON-BAYESIAN COMPARISON - NYSE
+================================================================================
+Study: bayesian_vs_nonbayesian_20251119_083350
+Architecture: R=3, K=3, heads=4, mc_train=3, mc_eval=15
+Loss: Non-Bayesian=Huber, Bayesian=GaussianNLL
+Training: LR=0.001, Epochs=500, Grad Clip=True (max_norm=5.0)
+Scheduler: MultiStepLR (milestones=[40, 60, 80], gamma=0.1)
+================================================================================
+
+Loading data...
+ Data shape: (3470, 82)
+NaN distribution:
+ Price       0
+Vol.        0
+weekday     0
+mom         0
+mom1        0
+           ..
+DE1        23
+DE2        28
+DE4        28
+DE5        28
+DE6        28
+Length: 82, dtype: int64
+ FILLNA BY MEDIAN - Data shape: (3470, 82)
+✓ Data loaded: 81 features
+  Train: 2772 samples
+  Val:   173 samples
+  Test:  520 samples
+
+Creating models...
+/tmp/ipython-input-173138017.py:865: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, p_value = spearmanr(confidence, errors)
+
+================================================================================
+TRAINING NON-BAYESIAN MODEL
+================================================================================
+Loss function: Deterministic (auto → Huber for MAMBA variants)
+Reason: Fixed variance, no MC sampling
+Gradient clipping: ENABLED (max_norm=5.0) - prevents gradient instability
+LR scheduler: MultiStepLR - improves convergence
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_083350 TRAINING - Unified Pipeline
+================================================================================
+Dataset: NYSE
+Models: BIMamba-MAGAC_NonBayesian
+Config: {'epochs': 500, 'lr': 0.001, 'loss_type': 'auto', 'patience': 10, 'optimizer_fn': <function run_comparison.<locals>.<lambda> at 0x7f62cfe4c5e0>, 'scheduler_fn': None, 'grad_clip': True, 'max_grad_norm': 5.0}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: BIMamba-MAGAC_NonBayesian
+================================================================================
+✓ New best model (Val Loss: 0.000031)
+✓ New best model (Val Loss: 0.000026)
+Epoch 5/500 - Train: 0.000038, Val: 0.000027, RMSE: 0.007340, IC: 0.9028, Time: 5.01s
+✓ New best model (Val Loss: 0.000004)
+Epoch 10/500 - Train: 0.000049, Val: 0.000008, RMSE: 0.003734, IC: 0.9155, Time: 5.06s
+✓ New best model (Val Loss: 0.000002)
+✓ New best model (Val Loss: 0.000002)
+Epoch 15/500 - Train: 0.000015, Val: 0.000002, RMSE: 0.002002, IC: 0.9690, Time: 5.05s
+✓ New best model (Val Loss: 0.000002)
+Epoch 20/500 - Train: 0.000007, Val: 0.000003, RMSE: 0.002707, IC: 0.9827, Time: 5.01s
+✓ New best model (Val Loss: 0.000001)
+Epoch 25/500 - Train: 0.000004, Val: 0.000002, RMSE: 0.001853, IC: 0.9883, Time: 4.62s
+Epoch 30/500 - Train: 0.000026, Val: 0.000003, RMSE: 0.002710, IC: 0.9774, Time: 4.33s
+Early stopping at epoch 32
+
+⏱️  Training completed in 147.26s
+   Average: 4.60s/epoch
+
+[BIMamba-MAGAC_NonBayesian] Test Results:
+  RMSE: 0.002000
+  MAE:  0.001603
+  IC (single-asset):  0.984223
+  RIC (single-asset): 0.979370
+  Dir Acc: 0.940385
+  Sharpe: 15.7904
+  Max DD: 0.0056
+  ⏱️  Avg time: 4.60s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE/BIMamba-MAGAC_NonBayesian/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+                    Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_NonBayesian 0.002000 0.001603 0.984223 0.979370 0.940385 15.7904 0.0056 322.8353 0.052152               4.60          147.3
+
+================================================================================
+✓ Results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE_summary_20251119_090016
+  - Comparison table: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE_summary_20251119_090016/bayesian_vs_nonbayesian_20251119_083350_comparison.csv
+  - Summary report: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE_summary_20251119_090016/bayesian_vs_nonbayesian_20251119_083350_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../NYSE_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../NYSE_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../NYSE_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+TRAINING BAYESIAN MODEL
+================================================================================
+Loss function: GaussianNLL
+Reason: Optimizes both mean and variance from MC sampling
+Gradient clipping: ENABLED (max_norm=5.0) - CRITICAL for Bayesian!
+  → Stabilizes high-variance gradients from MC sampling
+  → Prevents explosion in variance term of GaussianNLL
+  → Controls gradients from stochastic graph (DropEdge, MC Dropout)
+LR scheduler: MultiStepLR - ensures stable convergence
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_083350 TRAINING - Unified Pipeline
+================================================================================
+Dataset: NYSE
+Models: BIMamba-MAGAC_Bayesian
+Config: {'epochs': 500, 'lr': 0.001, 'loss_type': 'nll', 'patience': 10, 'optimizer_fn': <function run_comparison.<locals>.<lambda> at 0x7f632bf4e520>, 'scheduler_fn': None, 'grad_clip': True, 'max_grad_norm': 5.0}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: BIMamba-MAGAC_Bayesian
+================================================================================
+✓ New best model (Val Loss: -2.717562)
+✓ New best model (Val Loss: -4.121253)
+Epoch 5/500 - Train: 15.452223, Val: -3.965710, RMSE: 0.009609, IC: 0.9057, Time: 6.58s
+✓ New best model (Val Loss: -4.791284)
+Epoch 10/500 - Train: 0.466464, Val: -4.705842, RMSE: 0.005233, IC: 0.9295, Time: 5.94s
+✓ New best model (Val Loss: -4.817455)
+✓ New best model (Val Loss: -4.868371)
+Epoch 15/500 - Train: -4.263678, Val: -4.708170, RMSE: 0.005028, IC: 0.9401, Time: 5.89s
+✓ New best model (Val Loss: -4.969778)
+Epoch 20/500 - Train: -3.566262, Val: -5.024163, RMSE: 0.001886, IC: 0.9783, Time: 6.50s
+✓ New best model (Val Loss: -5.024163)
+Epoch 25/500 - Train: -3.512811, Val: -4.805486, RMSE: 0.004839, IC: 0.9746, Time: 5.93s
+Epoch 30/500 - Train: -4.103492, Val: -5.056229, RMSE: 0.001725, IC: 0.9803, Time: 6.59s
+✓ New best model (Val Loss: -5.056229)
+Epoch 35/500 - Train: -4.706566, Val: -5.082271, RMSE: 0.001763, IC: 0.9766, Time: 6.15s
+✓ New best model (Val Loss: -5.082271)
+Epoch 40/500 - Train: -1.725600, Val: -5.098748, RMSE: 0.001864, IC: 0.9905, Time: 5.91s
+✓ New best model (Val Loss: -5.098748)
+Epoch 45/500 - Train: -4.681536, Val: -5.092240, RMSE: 0.001189, IC: 0.9924, Time: 6.62s
+✓ New best model (Val Loss: -5.105054)
+✓ New best model (Val Loss: -5.107989)
+Epoch 50/500 - Train: -4.282257, Val: -4.958129, RMSE: 0.002905, IC: 0.9678, Time: 6.07s
+Epoch 55/500 - Train: -5.462086, Val: -5.051732, RMSE: 0.002548, IC: 0.9742, Time: 6.19s
+Early stopping at epoch 58
+
+⏱️  Training completed in 363.89s
+   Average: 6.27s/epoch
+
+[BIMamba-MAGAC_Bayesian] Test Results:
+  RMSE: 0.002034
+  MAE:  0.001610
+  IC (single-asset):  0.989401
+  RIC (single-asset): 0.985325
+  Dir Acc: 0.942308
+  Sharpe: 15.8538
+  Max DD: 0.0106
+  ⏱️  Avg time: 6.27s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE/BIMamba-MAGAC_Bayesian/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+                 Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_Bayesian 0.002034 0.001610 0.989401 0.985325 0.942308 15.8538 0.0106 169.9390 0.001668               6.27          363.9
+
+================================================================================
+✓ Results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE_summary_20251119_090244
+  - Comparison table: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE_summary_20251119_090244/bayesian_vs_nonbayesian_20251119_083350_comparison.csv
+  - Summary report: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE_summary_20251119_090244/bayesian_vs_nonbayesian_20251119_083350_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../NYSE_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../NYSE_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../NYSE_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+ADVANCED ANALYSIS
+================================================================================
+
+[1/4] Computing financial metrics...
+  Sharpe Ratio - NB: 9.0098, B: 9.1390
+  Max Drawdown - NB: -0.0000, B: -0.0000
+  RIC - NB: 0.9794, B: 0.9853
+
+[2/4] Computing probabilistic metrics...
+  CRPS - NB: -0.251383, B: -0.006569
+
+[3/4] Computing calibration metrics...
+  Mean Calibration Error - NB: 0.1267, B: 0.1267
+  Coverage@95% - NB: 1.0000, B: 1.0000
+
+[4/4] Analyzing market regimes...
+  Low volatility:    100.0%
+  Medium volatility: 0.0%
+  High volatility:   0.0%
+
+  Regime Performance:
+    low_volatility       - IC: NB=0.9842, B=0.9894
+
+================================================================================
+UNCERTAINTY-BASED ANALYSIS (Exploiting Bayesian Mean + Variance)
+================================================================================
+
+[1/5] Uncertainty-weighted IC...
+  UW-IC - NB: 0.9842, B: 0.9894
+  → Rewards confidence when correct
+
+[2/5] Risk-adjusted returns (position sizing by uncertainty)...
+  Base Sharpe - NB: 9.0098, B: 9.1390
+  Adjusted Sharpe - NB: 9.0098, B: 9.1393
+  Improvement - NB: 0.00%, B: 0.00%
+  → Lower uncertainty = larger position size
+
+[3/5] Sharpness (average uncertainty)...
+  Sharpness - NB: 0.223130, B: 0.005986
+  → Lower is better (more confident) IF calibrated
+
+[4/5] Prediction interval metrics...
+  95% PI Width - NB: 0.8747, B: 0.0235
+  95% Coverage - NB: 1.0000, B: 1.0000
+
+[5/5] Confidence-accuracy relationship...
+  Correlation (Confidence vs Error):
+    NB: nan (p=nan)
+    B:  -0.0317 (p=0.4700)
+  → Expect negative correlation (high confidence = low error)
+
+--------------------------------------------------------------------------------
+UNCERTAINTY CONTRIBUTION ANALYSIS
+--------------------------------------------------------------------------------
+
+When Bayesian is HIGHLY uncertain (top 25%):
+  Bayesian error:     0.001567
+  Non-Bayesian error: 0.001547
+  Mean sigma:         0.006325
+
+When Bayesian is CONFIDENT (bottom 25%):
+  Bayesian error:     0.001710
+  Non-Bayesian error: 0.001660
+  Mean sigma:         0.005709
+
+Does uncertainty identify difficult samples?
+  Correlation (Bayesian σ vs Non-Bayesian error): -0.0749
+  p-value: 8.8079e-02
+  → Positive correlation means Bayesian uncertainty identifies samples where Non-Bayesian struggles
+
+✓ Uncertainty analysis saved to: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE/uncertainty_analysis.json
+
+================================================================================
+COMPREHENSIVE COMPARISON SUMMARY
+================================================================================
+Metric                       Non-Bayesian        Bayesian  Improvement
+--------------------------------------------------------------------------------
+ic                               0.984223        0.989401        0.53%
+ric                              0.979370        0.985325        0.61%
+rmse                             0.002000        0.002034       -1.66%
+sharpe_ratio                     9.009786        9.139046        1.43%
+max_drawdown                    -0.000007       -0.000004      -36.80%
+crps                            -0.251383       -0.006569      -97.39%
+================================================================================
+
+✓ Comprehensive results saved to: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE
+
+================================================================================
+CROSS-DATASET SUMMARY
+================================================================================
+
+Metric                            Non-Bayesian             Bayesian  Improvement
+--------------------------------------------------------------------------------
+ic                           0.9743±0.0147     0.9910±0.0060         1.71%
+ric                          0.9659±0.0240     0.9880±0.0075         2.29%
+rmse                         0.0029±0.0006     0.0024±0.0017        14.94%
+sharpe_ratio                 9.0689±0.3766     9.1733±0.1949         1.15%
+max_drawdown                -0.0000±0.0000    -0.0000±0.0000       -54.82%
+crps                        -0.2524±0.0007    -0.0048±0.0022       -98.09%
+
+================================================================================
+REGIME PERFORMANCE SUMMARY (Average across datasets)
+================================================================================
+
+Regime                         Non-Bayesian IC          Bayesian IC
+----------------------------------------------------------------------
+low_volatility               0.9743±0.0147     0.9910±0.0060 
+================================================================================
+
+✓ Cross-dataset summary saved to: logs/bayesian_vs_nonbayesian_20251119_083350/cross_dataset_summary.json
+
+================================================================================
+STEP 2: CALCULATING CROSS-SECTIONAL IC
+================================================================================
+
+================================================================================
+CROSS-SECTIONAL IC ANALYSIS - BAYESIAN VS NON-BAYESIAN
+================================================================================
+Datasets: IXIC, DJI, NYSE
+================================================================================
+
+======================================================================
+Processing: BIMamba-MAGAC_NonBayesian
+======================================================================
+  ✓ IXIC: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC/BIMamba-MAGAC_NonBayesian/test_predictions.csv
+  ✓ DJI: logs/bayesian_vs_nonbayesian_20251119_083350/DJI/BIMamba-MAGAC_NonBayesian/test_predictions.csv
+  ✓ NYSE: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE/BIMamba-MAGAC_NonBayesian/test_predictions.csv
+
+  Calculating cross-sectional IC...
+Loaded IXIC: 520 samples
+Loaded DJI: 520 samples
+Loaded NYSE: 520 samples
+
+Calculating cross-sectional IC across 3 assets for 520 time points...
+/tmp/ipython-input-173138017.py:865: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  corr, p_value = spearmanr(confidence, errors)
+
+======================================================================
+CROSS-SECTIONAL IC ANALYSIS (Multi-Asset)
+======================================================================
+Assets analyzed: IXIC, DJI, NYSE
+Valid trading days: 520
+
+Cross-Sectional Information Coefficient (IC):
+  Mean:       0.774469
+  Std:        0.461258
+  Median:     0.969194
+  % Positive: 92.5%
+
+Cross-Sectional Rank IC (RIC):
+  Mean:       0.696154
+  Std:        0.470254
+  Median:     1.000000
+  % Positive: 92.3%
+
+📊 INTERPRETATION:
+   🔥 EXCEPTIONAL: IC > 0.05 is extremely rare in real markets!
+
+NOTE: Cross-sectional IC measures correlation ACROSS ASSETS at each
+      time point, unlike single-asset IC which measures correlation
+      across TIME for a single asset.
+======================================================================
+
+  Comparing single-asset vs cross-sectional IC...
+
+======================================================================
+COMPARISON: Single-Asset (Time-Series) vs Cross-Sectional IC
+======================================================================
+
+Single-Asset IC: Correlation of predictions vs actuals ACROSS TIME
+                 for each individual asset (usually high ~0.3-0.9)
+
+Cross-Sectional IC: Correlation of predictions vs actuals ACROSS ASSETS
+                    at each time point (usually low ~0.01-0.05)
+
+----------------------------------------------------------------------
+          Asset       IC      RIC
+           IXIC 0.985173 0.986143
+            DJI 0.953523 0.932247
+           NYSE 0.984223 0.979370
+CROSS-SECTIONAL 0.774469 0.696154
+======================================================================
+
+  ✓ BIMamba-MAGAC_NonBayesian completed
+    Cross-Sectional IC:  0.774469
+    Cross-Sectional RIC: 0.696154
+
+======================================================================
+Processing: BIMamba-MAGAC_Bayesian
+======================================================================
+  ✓ IXIC: logs/bayesian_vs_nonbayesian_20251119_083350/IXIC/BIMamba-MAGAC_Bayesian/test_predictions.csv
+  ✓ DJI: logs/bayesian_vs_nonbayesian_20251119_083350/DJI/BIMamba-MAGAC_Bayesian/test_predictions.csv
+  ✓ NYSE: logs/bayesian_vs_nonbayesian_20251119_083350/NYSE/BIMamba-MAGAC_Bayesian/test_predictions.csv
+
+  Calculating cross-sectional IC...
+Loaded IXIC: 520 samples
+Loaded DJI: 520 samples
+Loaded NYSE: 520 samples
+
+Calculating cross-sectional IC across 3 assets for 520 time points...
+
+======================================================================
+CROSS-SECTIONAL IC ANALYSIS (Multi-Asset)
+======================================================================
+Assets analyzed: IXIC, DJI, NYSE
+Valid trading days: 520
+
+Cross-Sectional Information Coefficient (IC):
+  Mean:       0.773263
+  Std:        0.437386
+  Median:     0.974224
+  % Positive: 92.5%
+
+Cross-Sectional Rank IC (RIC):
+  Mean:       0.725000
+  Std:        0.453989
+  Median:     1.000000
+  % Positive: 91.9%
+
+📊 INTERPRETATION:
+   🔥 EXCEPTIONAL: IC > 0.05 is extremely rare in real markets!
+
+NOTE: Cross-sectional IC measures correlation ACROSS ASSETS at each
+      time point, unlike single-asset IC which measures correlation
+      across TIME for a single asset.
+======================================================================
+
+  Comparing single-asset vs cross-sectional IC...
+
+======================================================================
+COMPARISON: Single-Asset (Time-Series) vs Cross-Sectional IC
+======================================================================
+
+Single-Asset IC: Correlation of predictions vs actuals ACROSS TIME
+                 for each individual asset (usually high ~0.3-0.9)
+
+Cross-Sectional IC: Correlation of predictions vs actuals ACROSS ASSETS
+                    at each time point (usually low ~0.01-0.05)
+
+----------------------------------------------------------------------
+          Asset       IC      RIC
+           IXIC 0.984550 0.980494
+            DJI 0.999014 0.998320
+           NYSE 0.989402 0.985325
+CROSS-SECTIONAL 0.773263 0.725000
+======================================================================
+
+  ✓ BIMamba-MAGAC_Bayesian completed
+    Cross-Sectional IC:  0.773263
+    Cross-Sectional RIC: 0.725000
+
+✓ Summary saved to: logs/bayesian_vs_nonbayesian_20251119_083350/cross_sectional_ic_summary.txt
+
+================================================================================
+CROSS-SECTIONAL IC COMPARISON SUMMARY
+================================================================================
+
+Metric                            Non-Bayesian        Bayesian  Improvement
+---------------------------------------------------------------------------
+Cross-Sectional IC Mean               0.774469        0.773263       -0.16%
+Cross-Sectional RIC Mean              0.696154        0.725000        4.14%
+IC Positive Ratio                       92.50%          92.50%
+RIC Positive Ratio                      92.31%          91.92%
+================================================================================
+
+📊 CROSS-SECTIONAL IC INTERPRETATION:
+   🔥 EXCEPTIONAL: IC > 0.05 is extremely rare in real markets!
+
+NOTE: Cross-sectional IC measures correlation ACROSS ASSETS at each
+      time point (typical range: 0.01-0.05), unlike single-asset IC
+      which measures correlation across TIME (typical range: 0.3-0.9)
+================================================================================
+
+================================================================================
+✓ MULTI-DATASET COMPARISON COMPLETED!
+================================================================================
+
+Results saved to: logs/bayesian_vs_nonbayesian/
+
+To generate comparison plots, run:
+  from utils.result_plot import plot_bayesian_vs_nonbayesian_comparison
+  plot_bayesian_vs_nonbayesian_comparison('logs/bayesian_vs_nonbayesian')

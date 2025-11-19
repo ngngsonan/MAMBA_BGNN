@@ -479,7 +479,9 @@ def train_one_model(
     log_dir: str,
     scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     device: str = 'cpu',
-    verbose: bool = True
+    verbose: bool = True,
+    grad_clip: bool = False,
+    max_grad_norm: float = 5.0
 ) -> Dict:
     """
     Train a single model with comprehensive metrics tracking
@@ -498,6 +500,8 @@ def train_one_model(
         scheduler: Optional learning rate scheduler
         device: Device to train on ('cpu' or 'cuda')
         verbose: Print progress
+        grad_clip: Enable gradient clipping (default: False)
+        max_grad_norm: Maximum gradient norm for clipping (default: 5.0)
 
     Returns:
         Dictionary with training history and test metrics
@@ -548,6 +552,11 @@ def train_one_model(
             mu, log_var = model(x)
             loss = loss_fn(mu, y.squeeze(), log_var.exp())
             loss.backward()
+
+            # Gradient clipping (if enabled)
+            if grad_clip:
+                nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+
             optimizer.step()
             train_loss += loss.item()
 
@@ -729,7 +738,8 @@ def train_models(
     log_base_dir: str = 'logs',
     study_name: str = 'baseline',
     verbose: bool = True,
-    device: str = 'cpu'
+    device: str = 'cpu',
+    use_nested_structure: bool = False
 ) -> Dict:
     """
     Train multiple models with unified pipeline
@@ -747,10 +757,14 @@ def train_models(
             - patience (int): Early stopping patience (default: 10)
             - optimizer_fn (Callable): Optimizer factory (default: Adam)
             - scheduler_fn (Callable): Scheduler factory (default: None)
+            - grad_clip (bool): Enable gradient clipping (default: False)
+            - max_grad_norm (float): Max gradient norm for clipping (default: 5.0)
         log_base_dir: Base directory for logs
         study_name: Name of study (e.g., 'baseline', 'ablation')
         verbose: Print progress
         device: Device to train on
+        use_nested_structure: If True, use logs/{study_name}/{dataset}/{model_name}/
+                             If False, use logs/{study_name}/{dataset}_{model_name}_{timestamp}/
 
     Returns:
         Dictionary with results for each model
@@ -762,7 +776,9 @@ def train_models(
         'loss_type': 'auto',
         'patience': 10,
         'optimizer_fn': lambda params, lr: torch.optim.Adam(params, lr=lr),
-        'scheduler_fn': None
+        'scheduler_fn': None,
+        'grad_clip': False,
+        'max_grad_norm': 5.0
     }
 
     if config is None:
@@ -789,7 +805,12 @@ def train_models(
         scheduler = config['scheduler_fn'](optimizer) if config['scheduler_fn'] is not None else None
 
         # Create log directory
-        log_dir = os.path.join(log_base_dir, study_name, f'{dataset}_{model_name}_{timestamp}')
+        if use_nested_structure:
+            # Nested: logs/{study_name}/{dataset}/{model_name}/
+            log_dir = os.path.join(log_base_dir, study_name, dataset, model_name)
+        else:
+            # Flat with timestamp: logs/{study_name}/{dataset}_{model_name}_{timestamp}/
+            log_dir = os.path.join(log_base_dir, study_name, f'{dataset}_{model_name}_{timestamp}')
 
         # Train
         metrics = train_one_model(
@@ -805,7 +826,9 @@ def train_models(
             log_dir=log_dir,
             scheduler=scheduler,
             device=device,
-            verbose=verbose
+            verbose=verbose,
+            grad_clip=config['grad_clip'],
+            max_grad_norm=config['max_grad_norm']
         )
 
         results[model_name] = metrics

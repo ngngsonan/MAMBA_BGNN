@@ -1,0 +1,30 @@
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_065456 MODELS COMPARISON SUMMARY
+================================================================================
+Dataset: NYSE
+Timestamp: 20251119_070636
+Models trained: BIMamba-MAGAC_NonBayesian
+================================================================================
+
+METRICS COMPARISON:
+--------------------------------------------------------------------------------
+                    Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_NonBayesian 0.001644 0.001283 0.988937 0.987094 0.953846 15.9437 0.0060 298.6544 0.052149               4.41          145.4
+
+================================================================================
+
+BEST MODELS BY METRIC:
+--------------------------------------------------------------------------------
+RMSE        : BIMamba-MAGAC_NonBayesian (0.001644)
+MAE         : BIMamba-MAGAC_NonBayesian (0.001283)
+IC          : BIMamba-MAGAC_NonBayesian (0.988937)
+RIC         : BIMamba-MAGAC_NonBayesian (0.987094)
+DIR_ACC     : BIMamba-MAGAC_NonBayesian (0.953846)
+SHARPE      : BIMamba-MAGAC_NonBayesian (15.943660)
+CALMAR      : BIMamba-MAGAC_NonBayesian (298.654449)
+CRPS        : BIMamba-MAGAC_NonBayesian (0.052149)
+
+TRAINING TIME SUMMARY:
+--------------------------------------------------------------------------------
+BIMamba-MAGAC_NonBayesian:  145.4s total,  4.41s/epoch
+TOTAL          :  145.4s (2.4 minutes)

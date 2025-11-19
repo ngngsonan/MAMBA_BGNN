@@ -1,0 +1,30 @@
+================================================================================
+BAYESIAN_VS_NONBAYESIAN_20251119_083350 MODELS COMPARISON SUMMARY
+================================================================================
+Dataset: DJI
+Timestamp: 20251119_084249
+Models trained: BIMamba-MAGAC_Bayesian
+================================================================================
+
+METRICS COMPARISON:
+--------------------------------------------------------------------------------
+                 Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD   Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+BIMamba-MAGAC_Bayesian 0.000529 0.000427 0.999014 0.998320 0.975000 15.5742 0.0019 906.5958 0.000448               6.33         1045.6
+
+================================================================================
+
+BEST MODELS BY METRIC:
+--------------------------------------------------------------------------------
+RMSE        : BIMamba-MAGAC_Bayesian (0.000529)
+MAE         : BIMamba-MAGAC_Bayesian (0.000427)
+IC          : BIMamba-MAGAC_Bayesian (0.999014)
+RIC         : BIMamba-MAGAC_Bayesian (0.998320)
+DIR_ACC     : BIMamba-MAGAC_Bayesian (0.975000)
+SHARPE      : BIMamba-MAGAC_Bayesian (15.574197)
+CALMAR      : BIMamba-MAGAC_Bayesian (906.595764)
+CRPS        : BIMamba-MAGAC_Bayesian (0.000448)
+
+TRAINING TIME SUMMARY:
+--------------------------------------------------------------------------------
+BIMamba-MAGAC_Bayesian: 1045.6s total,  6.33s/epoch
+TOTAL          : 1045.6s (17.4 minutes)

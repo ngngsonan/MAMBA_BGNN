@@ -1,0 +1,39 @@
+================================================================================
+COMPREHENSIVE ANALYSIS REPORT
+Bayesian vs Non-Bayesian MAMBA-BGNN Comparison
+================================================================================
+
+Generated: 2025-11-19 09:14:31
+Datasets: DJI, DJI_summary_20251119_084025, DJI_summary_20251119_084249, IXIC, IXIC_summary_20251119_083356, IXIC_summary_20251119_083630, NYSE, NYSE_summary_20251119_090016, NYSE_summary_20251119_090244
+
+================================================================================
+PERFORMANCE METRICS SUMMARY
+================================================================================
+
+Metric                             NB Mean±Std           B Mean±Std     Avg Imp%    p-value
+-----------------------------------------------------------------------------------------------
+ic                           0.9743±0.0147     0.9910±0.0060         1.74%    0.3690
+ric                          0.9659±0.0240     0.9880±0.0075         2.37%    0.4244
+rmse                         0.0029±0.0006     0.0024±0.0017        12.86%    0.7619
+mae                          0.0023±0.0005     0.0020±0.0014        10.83%    0.7960
+nll                          0.0000±0.0000    -5.4202±0.6756  153332152.96%    0.0077**
+crps                        -0.2524±0.0007    -0.0048±0.0022       -98.09%    0.0001***
+sharpe_ratio                 9.0689±0.3766     9.1733±0.1949         1.24%    0.5019
+max_drawdown                -0.0000±0.0000    -0.0000±0.0000       -36.26%    0.4476
+
+================================================================================
+UNCERTAINTY QUALITY ANALYSIS
+================================================================================
+
+sharpness                      NB:   0.223130  B:   0.004402  Better: Bayesian
+calibration_error              NB:   0.050000  B:   0.046154  Better: Bayesian
+coverage_95                    NB:   1.000000  B:   0.996154  Better: Non-Bayesian
+
+================================================================================
+KEY FINDINGS AND CONCLUSIONS
+================================================================================
+
+1. ✓ Bayesian model shows modest improvement in IC (+1.7%)
+2. ✓ Bayesian model provides better-calibrated uncertainty estimates
+3. ✓ Bayesian model achieves better risk-adjusted returns (+1.2%)
+4. ✓ 2/8 metrics show statistically significant differences (p<0.05)

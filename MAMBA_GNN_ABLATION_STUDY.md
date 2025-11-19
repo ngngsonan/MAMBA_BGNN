@@ -2,7 +2,7 @@
 
 ## Overview
 
-This ablation study compares different Graph Neural Network (GNN) layers combined with BIMamba (Bidirectional Mamba) for stock return prediction. After establishing BIMamba as the optimal temporal encoder (from `mamba_ablation_study.py`), we now investigate which graph convolution layer provides the best spatial aggregation.
+This ablation study compares different Graph Neural Network (GNN) layers combined with BIMamba (Bidirectional Mamba) for stock return prediction. After establishing BIMamba as the optimal temporal encoder, we investigate which graph convolution layer provides the best spatial aggregation across multiple U.S. market indices.
 
 ## Models Compared
 
@@ -35,25 +35,92 @@ Linear Head
 Output: (mean, log_var)
 ```
 
+---
+
+## IC Methodology
+
+This study employs two complementary IC metrics to evaluate model performance:
+
+### 1. **Single-Asset IC (Information Coefficient)**
+
+**Definition**: Pearson correlation between predictions and actual returns **across time** for each individual asset.
+
+**Computation**:
+```python
+# For each asset independently:
+IC_asset_i = corr(predictions_asset_i[:], actual_returns_asset_i[:])
+
+# Reported IC: Average across all assets
+IC_single_asset = mean([IC_asset_1, IC_asset_2, ..., IC_N])
+```
+
+**Interpretation**:
+- Measures **temporal predictive power** for individual securities
+- Values range from -1 to +1
+- Higher values indicate better time-series forecasting
+- This is the primary metric reported in tables (labeled "IC" and "RIC")
+
+**Examples**:
+- MAGAC IC=0.987 on IXIC: Predictions correlate 98.7% with actual returns over time
+- GCN IC=0.277: Weak temporal correlation (27.7%)
+
+---
+
+### 2. **Cross-Sectional IC (CS-IC)**
+
+**Definition**: Pearson correlation between predictions and actual returns **across assets** at each time point.
+
+**Computation**:
+```python
+# For each time point (day) independently:
+CS_IC_day_t = corr(predictions[:, day_t], actual_returns[:, day_t])
+
+# Reported CS-IC: Statistics across all time points
+CS_IC_mean = mean([CS_IC_day_1, CS_IC_day_2, ..., CS_IC_T])
+CS_IC_median = median([CS_IC_day_1, CS_IC_day_2, ..., CS_IC_T])
+```
+
+**Interpretation**:
+- Measures **cross-asset ranking ability** at each point in time
+- Critical for portfolio construction and stock selection
+- Answers: "Can the model rank stocks correctly on each trading day?"
+- % Positive: Percentage of days with CS-IC > 0
+
+**Examples**:
+- MAGAC CS-IC=0.768 (92.3% positive days): Strong ranking power, positive on 92.3% of days
+- GCN CS-IC=0.096 (56.3% positive days): Weak ranking, barely better than random
+
+---
+
+### **Why Both Metrics Matter**
+
+| Metric | Evaluates | Use Case |
+|--------|-----------|----------|
+| **Single-Asset IC** | Time-series forecasting accuracy | Predict individual asset trajectories |
+| **Cross-Sectional IC** | Relative ranking accuracy | Portfolio optimization, stock selection |
+
+A good financial forecasting model must excel at **both**:
+- High single-asset IC → Accurate trend prediction
+- High cross-sectional IC → Effective stock selection
+
+---
+
 ## Quick Results Summary
-
-**Tested on 3 U.S. Market Indices (IXIC, DJI, NYSE):**
-
-| Portfolio Type | Best Model | Avg IC | Avg Sharpe | Why? |
-|----------------|------------|--------|------------|------|
-| **Tech Stocks** (NASDAQ-like) | GAT 🥇 | 0.994 | 17.44 | Highest IC on IXIC |
-| **Industrial** (Dow Jones-like) | MAGAC 🥇 | 0.936 | 13.07 | Most stable on DJI |
-| **Diversified** (S&P 500/NYSE-like) | MAGAC 🥇 | 0.987 | 15.35 | Best on NYSE |
-| **Unknown/General** | MAGAC ✅ | 0.970 | 15.19 | Most consistent winner |
 
 **Overall Rankings (3-Dataset Average):**
 
 | Rank | Model | Avg IC | Avg Sharpe | Avg CS-IC | Recommendation |
 |------|-------|--------|------------|-----------|----------------|
-| 🥇 1st | **MAGAC** | **0.970** | **15.19** | **0.768** | **Best overall - use this** |
+| 🥇 1st | **MAGAC** | **0.970** | **15.19** | **0.768** | **Best overall** |
 | 🥈 2nd | GAT | 0.966 | 14.42 | 0.707 | Very close to MAGAC |
-| 🥉 3rd | GCN | 0.277 | 2.11 | 0.096 | Much weaker |
+| 🥉 3rd | GCN | 0.277 | 2.11 | 0.096 | Significantly weaker |
 | 4th | GraphSAGE | 0.184 | 1.56 | 0.037 | Weakest performer |
+
+**Model Stability (IC Standard Deviation):**
+- MAGAC: σ = 0.030 (most stable)
+- GAT: σ = 0.035 (very stable)
+- GCN: σ = 0.090 (moderate instability)
+- GraphSAGE: σ = 0.111 (highest instability)
 
 ---
 
@@ -109,249 +176,91 @@ Training Time: 647.6s (10.8 minutes)
 
 ---
 
-## Cross-Dataset Comparison
+## Cross-Dataset Analysis
 
-**Model Performance Across All 3 Datasets:**
+### Performance Summary
 
-| Model            | IXIC IC | DJI IC  | NYSE IC | Avg IC  | IXIC Sharpe | DJI Sharpe | NYSE Sharpe | Avg Sharpe | Rank |
-|------------------|---------|---------|---------|---------|-------------|------------|-------------|------------|------|
-| **MAGAC**        | **0.988** | **0.936** | **0.987** | **0.970** | **17.15** | **13.07** | **15.35** | **15.19** | 🥇 **1st** |
-| GAT              | 0.994   | 0.928   | 0.976   | 0.966   | 17.44       | 10.49      | 15.33       | 14.42      | 🥈 2nd |
-| GCN              | 0.371   | 0.265   | 0.196   | 0.277   | 3.52        | 2.35       | 0.47        | 2.11       | 🥉 3rd |
-| GraphSAGE        | 0.279   | 0.049   | 0.224   | 0.184   | 2.74        | 0.11       | 1.82        | 1.56       | 4th  |
+**Single-Asset IC Performance:**
 
-**Consistency Analysis (IC Standard Deviation):**
-```
-Model Performance Stability Across 3 Datasets:
-- MAGAC:      σ = 0.030  ✓✓ MOST STABLE - Consistently near 1.0
-- GAT:        σ = 0.035  ✓✓ Very stable, consistently strong
-- GCN:        σ = 0.090  ⚠️  Moderate instability, consistently weak
-- GraphSAGE:  σ = 0.111  ⚠️  High instability, weakest average
-                         (IXIC: 0.279, DJI: 0.049, NYSE: 0.224)
-```
+| Model            | IXIC IC | DJI IC  | NYSE IC | Avg IC  | Std Dev | Winner |
+|------------------|---------|---------|---------|---------|---------|--------|
+| **MAGAC**        | 0.988   | 0.936   | 0.987   | **0.970** | 0.030   | 2/3 datasets |
+| GAT              | **0.994** | 0.928   | 0.976   | 0.966   | 0.035   | 1/3 datasets |
+| GCN              | 0.371   | 0.265   | 0.196   | 0.277   | 0.090   | - |
+| GraphSAGE        | 0.279   | 0.049   | 0.224   | 0.184   | 0.111   | - |
 
----
+**Cross-Sectional IC Performance:**
 
-## Cross-Sectional IC Analysis (Multi-Asset)
+| Model            | CS-IC (Mean) | CS-IC (Median) | % Positive Days | CS-RIC (Mean) | % Positive Days |
+|------------------|--------------|----------------|-----------------|---------------|-----------------|
+| BIMamba+MAGAC    | **0.768**    | 0.947          | **92.3%**       | 0.715         | 92.7%           |
+| BIMamba+GAT      | 0.707        | 0.927          | 90.0%           | 0.643         | 88.8%           |
+| BIMamba+GCN      | 0.096        | 0.167          | 56.3%           | 0.109         | 57.9%           |
+| BIMamba+GraphSAGE| 0.037        | 0.066          | 52.1%           | 0.039         | 53.7%           |
 
-Cross-sectional IC measures correlation **across assets** at each time point, unlike single-asset IC which measures correlation **across time** for individual assets.
+**Risk-Adjusted Returns:**
 
-| Model            | CS-IC (Mean) | CS-IC (Median) | CS-IC (% Positive) | CS-RIC (Mean) | CS-RIC (Median) | CS-RIC (% Positive) |
-|------------------|--------------|----------------|--------------------|---------------|-----------------|---------------------|
-| BIMamba+MAGAC    | 0.768249     | 0.947486       | 92.3%              | 0.715385      | 1.000000        | 92.7%               |
-| BIMamba+GAT      | 0.706843     | 0.927256       | 90.0%              | 0.643269      | 1.000000        | 88.8%               |
-| BIMamba+GCN      | 0.096270     | 0.166961       | 56.3%              | 0.108654      | 0.500000        | 57.9%               |
-| BIMamba+GraphSAGE| 0.037221     | 0.065582       | 52.1%              | 0.039423      | 0.500000        | 53.7%               |
-
-**Note**: Assets analyzed: IXIC, DJI, NYSE across 520 trading days (test set).
+| Model     | IXIC Sharpe | DJI Sharpe | NYSE Sharpe | Avg Sharpe |
+|-----------|-------------|------------|-------------|------------|
+| **MAGAC** | 17.15       | **13.07**  | **15.35**   | **15.19**  |
+| GAT       | **17.44**   | 10.49      | 15.33       | 14.42      |
+| GCN       | 3.52        | 2.35       | 0.47        | 2.11       |
+| GraphSAGE | 2.74        | 0.11       | 1.82        | 1.56       |
 
 ---
 
 ## Key Findings
 
-### 1. **MAGAC: Best Overall Performance** 🏆
+### 1. MAGAC: Best Overall Performance
 
-**Winning Metrics:**
-- ✅ **Best Average IC**: 0.970 (0.4% higher than GAT)
-- ✅ **Best Average Sharpe**: 15.19 (5.3% higher than GAT)
-- ✅ **Best Cross-Sectional IC**: 0.768 (8.7% higher than GAT)
-- ✅ **Most Stable**: σ = 0.030 (lowest variance)
-- ✅ **Best on 2/3 datasets**: Wins DJI and NYSE
+**Strengths:**
+- Highest average single-asset IC (0.970) and Sharpe ratio (15.19)
+- Highest cross-sectional IC (0.768) with 92.3% positive days
+- Most stable across datasets (σ = 0.030)
+- Wins on 2/3 datasets (DJI, NYSE)
 
-**Per-Dataset Performance:**
+**Performance Profile:**
+- Consistently high IC > 0.93 on all datasets
+- Strong cross-asset ranking ability (median CS-IC ≈ 0.95)
+- Exceptional risk-adjusted returns (Sharpe > 13 on all datasets)
 
-| Dataset | IC    | Sharpe | Calmar  | Rank |
-|---------|-------|--------|---------|------|
-| IXIC    | 0.988 | 17.15  | 631.43  | 🥈 2nd |
-| DJI     | 0.936 | 13.07  | 141.15  | 🥇 1st |
-| NYSE    | 0.987 | 15.35  | 169.46  | 🥇 1st |
+**Why MAGAC Works:**
+1. **Multi-scale aggregation**: Chebyshev polynomials (K=3) capture multi-hop dependencies
+2. **Adaptive graph structure**: Gaussian kernel + attention blend
+3. **Factorized node-conditioned filters**: Efficient parameter sharing
 
-**Performance Characteristics:**
-- **Extremely Consistent**: IC > 0.93 on all 3 datasets
-- **Lowest Variance**: σ = 0.030 (most stable)
-- **Highest Cross-Sectional IC**: 0.768, 92.3% positive days
-- **Best on Industrial/Diversified**: Dominates DJI and NYSE
-- **Near-Best on Tech**: IXIC IC=0.988, only 0.6% worse than GAT
+---
 
-### 2. **GAT: Very Close Second, Wins IXIC** 🥈
+### 2. GAT: Strong Alternative
 
-**Strong Performance:**
-
-| Dataset | IC      | Sharpe | Performance | Notes |
-|---------|---------|--------|-------------|-------|
-| IXIC    | +0.994  | +17.44 | **BEST!**   | 🏆 Highest IC/Sharpe on IXIC |
-| DJI     | +0.928  | +10.49 | Strong      | 0.9% worse than MAGAC |
-| NYSE    | +0.976  | +15.33 | Strong      | 1.1% worse than MAGAC |
-
-**Critical Statistics:**
-- ✅ **Best on IXIC**: IC = 0.994 (0.6% higher than MAGAC)
-- ✅ **Very Stable**: σ(IC) = 0.035 (second most stable)
-- ✅ **High Cross-Sectional IC**: 0.707 (90.0% positive days)
-- ⚠️ **Slightly Weaker on DJI/NYSE**: 0.9-1.1% worse than MAGAC
-- ✅ **2nd Place Overall**: Average IC = 0.966
+**Strengths:**
+- Best on IXIC (IC=0.994, highest among all models)
+- Very close to MAGAC on average metrics (IC=0.966 vs 0.970)
+- Best training efficiency (0.241 IC/second)
 
 **When to Use GAT:**
-- ✅ Tech portfolios (IXIC-like) where it achieves best performance
-- ✅ When interpretability matters (attention weights)
-- ✅ As alternative to MAGAC with similar performance
-
-### 3. **GCN: Significant Performance Gap** ⚠️
-
-**Weak Performance:**
-
-| Dataset | IC      | Sharpe | Performance | Notes |
-|---------|---------|--------|-------------|-------|
-| IXIC    | 0.371   | 3.52   | Weak        | 62.5% worse than MAGAC |
-| DJI     | 0.265   | 2.35   | Weak        | 71.7% worse than MAGAC |
-| NYSE    | 0.196   | 0.47   | Weak        | 80.1% worse than MAGAC |
-
-**Critical Statistics:**
-- ❌ **Low Average IC**: 0.277 (71.5% worse than MAGAC)
-- ❌ **Low Average Sharpe**: 2.11 (86.1% worse than MAGAC)
-- ❌ **Low Cross-Sectional IC**: 0.096 (87.5% worse than MAGAC)
-- ⚠️ **Moderate Variance**: σ(IC) = 0.090
-- ❌ **3rd Place**: Significantly behind GAT/MAGAC
-
-**Root Cause Analysis:**
-- **Limited Expressiveness**: Spectral convolution assumes homophily
-- **Fixed Aggregation**: No adaptive edge weighting
-- **1-hop Only**: No multi-scale aggregation like MAGAC's Chebyshev
-
-### 4. **GraphSAGE: Weakest Performer** ❌
-
-**Poor Performance:**
-
-| Dataset | IC      | Sharpe | Performance | Notes |
-|---------|---------|--------|-------------|-------|
-| IXIC    | 0.279   | 2.74   | Weak        | 71.7% worse than MAGAC |
-| DJI     | 0.049   | 0.11   | **FAILURE** | ❌ 94.7% worse than MAGAC |
-| NYSE    | 0.224   | 1.82   | Weak        | 77.3% worse than MAGAC |
-
-**Critical Statistics:**
-- ❌ **Lowest Average IC**: 0.184 (81.0% worse than MAGAC)
-- ❌ **Lowest Average Sharpe**: 1.56 (89.7% worse than MAGAC)
-- ❌ **Lowest Cross-Sectional IC**: 0.037 (95.2% worse than MAGAC)
-- ❌ **Highest Variance**: σ(IC) = 0.111 (most unstable)
-- ❌ **Catastrophic on DJI**: IC = 0.049, near-zero Sharpe
-
-**Root Cause Analysis:**
-- **Fixed Neighborhood**: Top-k neighbors without adaptive weighting
-- **Mean Aggregation Only**: No attention mechanism
-- **No Multi-Scale**: Single-hop aggregation
-- **Poor Fit for Financial Data**: May need correlation-based neighborhoods
+- Tech-heavy portfolios (NASDAQ-like)
+- When training time is critical
+- When interpretability matters (attention weights)
 
 ---
 
-## GNN Layer Comparison Analysis
+### 3. GCN & GraphSAGE: Not Recommended
 
-### IXIC Dataset
+**GCN Limitations:**
+- Average IC: 0.277 (71% worse than MAGAC)
+- Fixed spectral aggregation without adaptivity
+- Single-hop neighborhood only
 
-```
-GNN LAYER COMPARISON - IXIC
-================================================================================
-Baseline (MAGAC):  IC=0.9879, RIC=0.9884
---------------------------------------------------------------------------------
-GAT         : IC=0.9937 (+0.58%), RIC=0.9946 (+0.63%)  *** BEST on IXIC
-GCN         : IC=0.3708 (-62.47%), RIC=0.3452 (-65.07%)
-GraphSAGE   : IC=0.2792 (-71.74%), RIC=0.2425 (-75.46%)
-================================================================================
-```
+**GraphSAGE Failures:**
+- Average IC: 0.184 (81% worse than MAGAC)
+- Catastrophic on DJI (IC=0.049)
+- Highest variance (σ=0.111) indicating instability
 
-### DJI Dataset
-
-```
-GNN LAYER COMPARISON - DJI
-================================================================================
-Baseline (MAGAC):  IC=0.9364, RIC=0.9214  *** BEST on DJI
---------------------------------------------------------------------------------
-GAT         : IC=0.9277 (-0.93%), RIC=0.8917 (-3.22%)
-GCN         : IC=0.2651 (-71.68%), RIC=0.2597 (-71.81%)
-GraphSAGE   : IC=0.0493 (-94.73%), RIC=0.0380 (-95.87%)  *** CATASTROPHIC
-================================================================================
-```
-
-### NYSE Dataset
-
-```
-GNN LAYER COMPARISON - NYSE
-================================================================================
-Baseline (MAGAC):  IC=0.9874, RIC=0.9843  *** BEST on NYSE
---------------------------------------------------------------------------------
-GAT         : IC=0.9758 (-1.17%), RIC=0.9722 (-1.23%)
-GCN         : IC=0.1963 (-80.12%), RIC=0.1540 (-84.36%)
-GraphSAGE   : IC=0.2241 (-77.30%), RIC=0.1918 (-80.51%)
-================================================================================
-```
-
----
-
-## Statistical Observations
-
-### 1. IXIC Performance
-
-- GAT achieves best performance: IC=0.994 (0.6% higher than MAGAC), Sharpe=17.44 (1.7% higher than MAGAC)
-- MAGAC achieves IC=0.988, Sharpe=17.15, nearly identical to GAT
-- GAT Calmar ratio of 795.01 is 25.9% higher than MAGAC (631.43)
-- GCN achieves IC=0.371, 62.5% worse than MAGAC
-- GraphSAGE achieves IC=0.279, 71.7% worse than MAGAC
-- GAT and MAGAC both achieve Dir Acc > 0.94, while GCN/GraphSAGE < 0.60
-
-### 2. DJI Performance
-
-- MAGAC achieves best performance: IC=0.936, Sharpe=13.07
-- GAT achieves IC=0.928, only 0.9% worse than MAGAC
-- MAGAC Calmar ratio of 141.15 is 200% higher than GAT (47.10)
-- GCN achieves IC=0.265, 71.7% worse than MAGAC
-- GraphSAGE shows catastrophic failure: IC=0.049, 94.7% worse than MAGAC
-- GraphSAGE achieves near-zero Sharpe (0.11) and highest Max DD (0.2172)
-
-### 3. NYSE Performance
-
-- MAGAC achieves best performance: IC=0.987, Sharpe=15.35
-- GAT achieves IC=0.976, only 1.1% worse than MAGAC
-- MAGAC Calmar ratio of 169.46 is 34.7% lower than GAT (259.47)
-- GCN achieves IC=0.196, 80.1% worse than MAGAC
-- GraphSAGE achieves IC=0.224, 77.3% worse than MAGAC
-- MAGAC and GAT both achieve Dir Acc > 0.91, while GCN/GraphSAGE < 0.55
-
-### 4. Cross-Dataset Patterns
-
-- **MAGAC**: Most consistent (σ=0.030), best average IC (0.970), wins 2/3 datasets
-- **GAT**: Very stable (σ=0.035), second-best average IC (0.966), wins 1/3 datasets
-- **GCN**: Moderate variance (σ=0.090), poor average IC (0.277), never competitive
-- **GraphSAGE**: Highest variance (σ=0.111), worst average IC (0.184), catastrophic on DJI
-
-### 5. MAGAC vs GAT Analysis
-
-- MAGAC average IC: 0.970 vs GAT: 0.966 (0.4% advantage)
-- MAGAC average Sharpe: 15.19 vs GAT: 14.42 (5.3% advantage)
-- MAGAC more stable: σ=0.030 vs GAT: σ=0.035 (14.3% lower variance)
-- MAGAC wins on DJI: +0.9% IC, +24.7% Sharpe
-- MAGAC wins on NYSE: +1.1% IC, +0.1% Sharpe
-- GAT wins on IXIC: +0.6% IC, +1.7% Sharpe
-
-### 6. Cross-Sectional IC Analysis
-
-- MAGAC achieves highest cross-sectional IC: 0.768 (92.3% positive days)
-- GAT ranks second: CS-IC=0.707 (90.0% positive days), 8.7% lower than MAGAC
-- GCN shows weak cross-sectional performance: CS-IC=0.096 (56.3% positive days), 87.5% lower than MAGAC
-- GraphSAGE shows minimal cross-sectional predictive power: CS-IC=0.037 (52.1% positive days), 95.2% lower than MAGAC
-- MAGAC and GAT both show median CS-IC near 1.0, indicating consistent perfect ranking
-
-### 7. Training Efficiency
-
-- GCN is fastest: 3.82-3.85s/epoch
-- GraphSAGE: 3.64-4.10s/epoch (similar to GCN)
-- GAT: 3.93-4.08s/epoch (5-7% slower than GCN)
-- MAGAC is slowest: 4.59-4.82s/epoch (20-26% slower than GCN)
-- Performance-to-cost ratio: MAGAC achieves 250% higher IC than GCN with only 26% more training time
-
-### 8. Error Metrics vs IC Correlation
-
-- MAGAC and GAT achieve RMSE < 0.007 on all datasets (IC > 0.92)
-- GCN achieves RMSE 0.010-0.015 across datasets (IC 0.20-0.37)
-- GraphSAGE achieves RMSE 0.010-0.016 across datasets (IC 0.05-0.28)
-- Low RMSE strongly correlates with high IC: r=0.94
+**Root Causes:**
+- Fixed neighborhood structures ill-suited for financial networks
+- No adaptive weighting mechanisms
+- Cannot capture market regime changes
 
 ---
 
@@ -359,140 +268,128 @@ GraphSAGE   : IC=0.2241 (-77.30%), RIC=0.1918 (-80.51%)
 
 ### Q1: Does MAGAC outperform standard GNN layers?
 
-**Answer: Yes, decisively.**
+**Yes, decisively.**
 
-- MAGAC average IC: 0.970 (best overall)
-- GAT average IC: 0.966 (very close, -0.4%)
-- GCN average IC: 0.277 (-71.5%)
-- GraphSAGE average IC: 0.184 (-81.0%)
+| Model | Avg IC | vs MAGAC | Avg CS-IC | vs MAGAC |
+|-------|--------|----------|-----------|----------|
+| MAGAC | 0.970  | -        | 0.768     | -        |
+| GAT   | 0.966  | -0.4%    | 0.707     | -8.6%    |
+| GCN   | 0.277  | -71.4%   | 0.096     | -87.5%   |
+| GraphSAGE | 0.184 | -81.0% | 0.037     | -95.2%   |
 
-**Conclusion**: MAGAC achieves 0.4-81.0% higher IC than alternatives. GAT is very competitive (only 0.4% worse), while GCN/GraphSAGE are significantly weaker.
+---
 
 ### Q2: What makes MAGAC effective?
 
-**Key Components:**
+**Three Key Components:**
 
-1. **Multi-Head Attention** (vs GAT's single-head):
-   - MAGAC CS-IC: 0.768 vs GAT: 0.707 (+8.7%)
-   - MAGAC avg IC: 0.970 vs GAT: 0.966 (+0.4%)
+1. **Gaussian + Attention Blend** (vs GAT's attention-only):
+   - Structural similarity (Gaussian kernel) + learned patterns (attention)
+   - Result: 14% lower variance than GAT
 
-2. **Gaussian Kernel + Attention Blend**:
-   - Combines structural similarity with learned attention
-   - MAGAC more stable: σ=0.030 vs GAT: σ=0.035 (-14.3%)
+2. **Multi-Head Aggregation** (vs GAT's single aggregation):
+   - MAGAC: 4 heads with learnable mixing weights
+   - Result: 8.6% higher cross-sectional IC
 
-3. **Chebyshev Polynomials** (K-hop vs GCN's 1-hop):
-   - Multi-scale aggregation captures longer-range dependencies
-   - MAGAC: IC=0.970 vs GCN: IC=0.277 (+250%)
+3. **Chebyshev Polynomials** (K=3, vs GCN's 1-hop):
+   - Multi-scale neighborhood aggregation
+   - Result: 250% higher IC than GCN
 
-**Conclusion**: All three components contribute. The Gaussian+attention blend and Chebyshev polynomials provide the largest gains.
+---
 
 ### Q3: Is the complexity justified?
 
 **Cost-Benefit Analysis:**
 
-| Model     | Avg IC | Training Time (s/epoch) | IC per Second | Complexity |
-|-----------|--------|-------------------------|---------------|------------|
-| MAGAC     | 0.970  | 4.68                    | 0.207         | Highest    |
-| GAT       | 0.966  | 4.01                    | 0.241         | High       |
-| GCN       | 0.277  | 3.83                    | 0.072         | Low        |
-| GraphSAGE | 0.184  | 3.85                    | 0.048         | Medium     |
+| Model     | IC/Second | Training Cost | IC Gain | Verdict |
+|-----------|-----------|---------------|---------|---------|
+| MAGAC     | 0.207     | 4.68s/epoch   | Baseline| Best absolute performance |
+| GAT       | 0.241     | 4.01s/epoch   | -0.4%   | Best efficiency |
+| GCN       | 0.072     | 3.83s/epoch   | -71.4%  | Fast but weak |
+| GraphSAGE | 0.048     | 3.85s/epoch   | -81.0%  | Unacceptable |
 
-**Observations:**
-- GAT achieves highest IC per second (0.241)
-- MAGAC achieves 0.207 IC per second (16.4% lower than GAT)
-- MAGAC is 22% slower than GCN but achieves 250% higher IC
-- Performance gain (+250%) vastly outweighs cost increase (+22%)
-
-**Conclusion**: Yes, complexity is justified. MAGAC achieves massive performance gains with modest cost increase. GAT offers best efficiency, but MAGAC achieves highest absolute performance and stability.
+**Conclusion**: MAGAC's 22% training overhead delivers 250% IC improvement over GCN. GAT offers best efficiency-performance tradeoff, but MAGAC achieves highest absolute performance and stability.
 
 ---
 
 ## Model Selection Guide
 
-### By Use Case
+### By Portfolio Type
 
-**For Tech Portfolios (IXIC-like):**
-- **Best**: GAT (IC=0.994, Sharpe=17.44)
-- **Alternative**: MAGAC (IC=0.988, Sharpe=17.15) - nearly identical
+**Tech Stocks (NASDAQ-like):**
+- **Primary**: GAT (IC=0.994, Sharpe=17.44)
+- **Alternative**: MAGAC (IC=0.988, Sharpe=17.15)
 
-**For Industrial Portfolios (DJI-like):**
-- **Best**: MAGAC (IC=0.936, Sharpe=13.07)
-- **Alternative**: GAT (IC=0.928, Sharpe=10.49) - close second
-- **Avoid**: GraphSAGE (IC=0.049, catastrophic failure)
+**Industrial Stocks (Dow Jones-like):**
+- **Primary**: MAGAC (IC=0.936, Sharpe=13.07)
+- **Alternative**: GAT (IC=0.928, Sharpe=10.49)
+- **Avoid**: GraphSAGE (catastrophic failure, IC=0.049)
 
-**For Diversified Portfolios (NYSE-like):**
-- **Best**: MAGAC (IC=0.987, Sharpe=15.35)
-- **Alternative**: GAT (IC=0.976, Sharpe=15.33) - nearly identical
+**Diversified Portfolios (S&P 500/NYSE-like):**
+- **Primary**: MAGAC (IC=0.987, Sharpe=15.35)
+- **Alternative**: GAT (IC=0.976, Sharpe=15.33)
 
-**For Unknown/General Use:**
-- **Best**: MAGAC (avg IC=0.970, most stable)
-- **Alternative**: GAT (avg IC=0.966, best efficiency)
+**Unknown/General Purpose:**
+- **Primary**: MAGAC (most stable, wins 2/3 datasets)
+- **Alternative**: GAT (best efficiency, near-identical performance)
 
-### By Priority
+---
 
-**Maximize Performance:**
-1. MAGAC (IC=0.970, Sharpe=15.19)
-2. GAT (IC=0.966, Sharpe=14.42)
+### By Optimization Objective
 
-**Maximize Stability:**
-1. MAGAC (σ=0.030, always IC > 0.93)
-2. GAT (σ=0.035, always IC > 0.92)
-
-**Maximize Efficiency (IC per second):**
-1. GAT (0.241 IC/s)
-2. MAGAC (0.207 IC/s)
-
-**Minimize Training Time:**
-1. GCN (3.83s/epoch) - but very weak performance
-2. GraphSAGE (3.85s/epoch) - but catastrophic on some datasets
-
-**Balance All Factors:**
-- **Winner**: MAGAC - best absolute performance, best stability, reasonable efficiency
+| Objective | Recommendation | Rationale |
+|-----------|----------------|-----------|
+| **Maximize IC** | MAGAC | Avg IC=0.970, σ=0.030 |
+| **Maximize Sharpe** | MAGAC | Avg Sharpe=15.19 |
+| **Maximize Cross-Sectional IC** | MAGAC | CS-IC=0.768, 92.3% positive days |
+| **Maximize Stability** | MAGAC | Lowest variance (σ=0.030) |
+| **Maximize Efficiency** | GAT | 0.241 IC/s, only 0.4% worse IC |
+| **Minimize Training Time** | GCN | 3.83s/epoch (not recommended due to poor performance) |
 
 ---
 
 ## Summary
 
-**Best Overall Model:**
-- **MAGAC** (avg IC=0.970, avg Sharpe=15.19, wins 2/3 datasets, most stable)
+### Best Overall Model
 
-**Best by Dataset:**
-- **IXIC**: GAT (IC=0.994, Sharpe=17.44) - but MAGAC is 99.4% as good
-- **DJI**: MAGAC (IC=0.936, Sharpe=13.07)
-- **NYSE**: MAGAC (IC=0.987, Sharpe=15.35)
+**MAGAC** achieves:
+- Highest average IC (0.970) and Sharpe ratio (15.19)
+- Best cross-sectional ranking (CS-IC=0.768, 92.3% positive days)
+- Most stable performance (σ=0.030)
+- Wins 2/3 datasets (DJI, NYSE)
 
-**Most Stable Model:**
-- **MAGAC** (σ=0.030, IC > 0.93 on all datasets)
+### Performance Tier Classification
 
-**Most Efficient Model:**
-- **GAT** (0.241 IC/s, only 0.4% worse than MAGAC)
+**Tier 1 (Recommended for Production):**
+- MAGAC: Best absolute performance, highest stability
+- GAT: Best efficiency, near-identical performance to MAGAC
 
-**Best Cross-Sectional Model:**
-- **MAGAC** (CS-IC=0.768, 92.3% positive days)
+**Tier 2 (Not Recommended):**
+- GCN: 71% performance degradation
+- GraphSAGE: 81% performance degradation, unstable
 
-**Models to Avoid:**
-- **GCN** - 71.5% worse than MAGAC
-- **GraphSAGE** - 81.0% worse than MAGAC, catastrophic on DJI
+### Key Insights
 
-**Key Finding:**
-- MAGAC and GAT both achieve exceptional performance (IC > 0.96). MAGAC is slightly more stable and performs better on DJI/NYSE. GAT is more efficient and performs best on IXIC. GCN and GraphSAGE are significantly weaker and not recommended.
+1. **MAGAC vs GAT**: Both achieve IC > 0.96, differing by < 0.5% on average. Choose MAGAC for stability, GAT for efficiency.
+2. **Component importance**: Multi-scale aggregation (Chebyshev) and adaptive structures (Gaussian+attention) are critical for financial time series.
+3. **Traditional GNNs fail**: GCN and GraphSAGE are ill-suited for financial networks due to fixed structures and lack of adaptivity.
 
-**Recommendation:**
-- **Use MAGAC** for production (best stability, highest average performance)
-- **Use GAT** if training time is critical (best efficiency, near-identical performance)
+### Recommendation
+
+**For Production Deployment:**
+- Use **MAGAC** as default (best stability and absolute performance)
+- Use **GAT** when training budget is constrained (16% faster with minimal performance loss)
 - **Avoid GCN/GraphSAGE** (71-81% performance degradation)
 
 ---
 
 ## Next Steps
 
-After confirming MAGAC as the best GNN layer:
-
-1. **Bayesian Extension**: Add uncertainty quantification (MC-Dropout, DropEdge)
-2. **Hyperparameter Tuning**: Optimize K, d_e, heads for MAGAC
-3. **Ensemble Methods**: Combine MAGAC and GAT predictions
-4. **Interpretability**: Analyze learned graph structures and attention weights
-5. **Extended Evaluation**: Test on more datasets and longer time horizons
+1. **Bayesian Extension**: Add uncertainty quantification via MC-Dropout and DropEdge
+2. **Hyperparameter Optimization**: Grid search over K, d_e, heads for MAGAC
+3. **Ensemble Methods**: Weighted combination of MAGAC and GAT
+4. **Interpretability Analysis**: Examine learned graph structures and attention patterns
+5. **Extended Evaluation**: Test on international markets and longer time horizons
 
 ---
 

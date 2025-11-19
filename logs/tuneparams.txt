@@ -1,0 +1,896 @@
+Using device: cuda
+
+================================================================================
+FULL TUNING: Complete grid search
+================================================================================
+================================================================================
+MAMBA-BGNN: CRITICAL HYPERPARAMETER TUNING
+================================================================================
+Dataset: IXIC
+Loss Function: GaussianNLL (optimized for Bayesian uncertainty)
+
+Tuning Parameters:
+  K (Chebyshev order):    [2, 3, 4]
+  R (BIMamba layers):     [2, 3]
+  mc_eval (MC samples):   [10, 15]
+  mc_train (MC samples):  [5]
+  heads (Attention heads): [4]
+
+Fixed Parameters:
+  d_e: 10, drop_edge_p: 0.1, mc_dropout_p: 0.2
+
+Training Configuration:
+  Window: 5, Batch: 32, Epochs: 100
+  Learning Rate: 0.01, Hidden Dim: 64
+
+Total configurations: 12
+================================================================================
+
+Loading data...
+ Data shape: (3470, 82)
+NaN distribution:
+ Price       0
+Vol.        0
+weekday     0
+mom         0
+mom1        0
+           ..
+DE1        23
+DE2        28
+DE4        28
+DE5        28
+DE6        28
+Length: 82, dtype: int64
+ FILLNA BY MEDIAN - Data shape: (3470, 82)
+✓ Data loaded: 81 features
+  Train: 2772 samples
+  Val:   173 samples
+  Test:  520 samples
+
+================================================================================
+Config 1/12: K2_R2_MC5-10_H4
+================================================================================
+K=2, R=2, mc_train=5, mc_eval=10, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K2_R2_MC5-10_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9c94294040>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K2_R2_MC5-10_H4
+================================================================================
+✓ New best model (Val Loss: 0.612339)
+✓ New best model (Val Loss: 0.092416)
+Epoch 5/100 - Train: 23.723749, Val: 0.670104, RMSE: 0.012391, IC: 0.0432, Time: 5.13s
+✓ New best model (Val Loss: -0.342062)
+✓ New best model (Val Loss: -0.680241)
+✓ New best model (Val Loss: -1.530647)
+Epoch 10/100 - Train: 15.782629, Val: -1.415892, RMSE: 0.011401, IC: -0.0375, Time: 5.38s
+✓ New best model (Val Loss: -2.092599)
+✓ New best model (Val Loss: -2.212475)
+✓ New best model (Val Loss: -2.252572)
+✓ New best model (Val Loss: -2.870122)
+Epoch 15/100 - Train: 8.731849, Val: -2.969467, RMSE: 0.011431, IC: 0.0815, Time: 5.67s
+✓ New best model (Val Loss: -2.969467)
+✓ New best model (Val Loss: -3.207672)
+✓ New best model (Val Loss: -3.315036)
+✓ New best model (Val Loss: -3.532784)
+Epoch 20/100 - Train: 4.469353, Val: -3.487391, RMSE: 0.011931, IC: -0.0404, Time: 5.10s
+✓ New best model (Val Loss: -3.663305)
+✓ New best model (Val Loss: -3.697249)
+✓ New best model (Val Loss: -3.842371)
+Epoch 25/100 - Train: 2.016967, Val: -3.763859, RMSE: 0.011854, IC: 0.0235, Time: 5.17s
+✓ New best model (Val Loss: -3.938688)
+Epoch 30/100 - Train: 0.585283, Val: -3.898976, RMSE: 0.011841, IC: 0.0273, Time: 5.66s
+Early stopping at epoch 31
+
+⏱️  Training completed in 167.00s
+   Average: 5.38s/epoch
+
+[K2_R2_MC5-10_H4] Test Results:
+  RMSE: 0.016407
+  MAE:  0.012593
+  IC (single-asset):  0.013366
+  RIC (single-asset): 0.020911
+  Dir Acc: 0.496154
+  Sharpe: -0.8139
+  Max DD: 0.5205
+  ⏱️  Avg time: 5.38s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K2_R2_MC5-10_H4_20251118_180405/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K2_R2_MC5-10_H4 0.016407 0.012593 0.013366 0.020911 0.496154 -0.8139 0.5205 -0.4023 0.009696               5.38          167.0
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_180405
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_180405/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_180405/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 2/12: K2_R2_MC5-15_H4
+================================================================================
+K=2, R=2, mc_train=5, mc_eval=15, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K2_R2_MC5-15_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9c94297600>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K2_R2_MC5-15_H4
+================================================================================
+✓ New best model (Val Loss: 0.565831)
+✓ New best model (Val Loss: -1.734704)
+Epoch 5/100 - Train: 31.371359, Val: -1.065493, RMSE: 0.011734, IC: -0.0892, Time: 5.39s
+Early stopping at epoch 9
+
+⏱️  Training completed in 49.54s
+   Average: 5.50s/epoch
+
+[K2_R2_MC5-15_H4] Test Results:
+  RMSE: 0.016536
+  MAE:  0.012879
+  IC (single-asset):  -0.036163
+  RIC (single-asset): -0.047455
+  Dir Acc: 0.503846
+  Sharpe: 0.0472
+  Max DD: 0.3086
+  ⏱️  Avg time: 5.50s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K2_R2_MC5-15_H4_20251118_180653/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE        IC       RIC  Dir Acc Sharpe Max DD Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K2_R2_MC5-15_H4 0.016536 0.012879 -0.036163 -0.047455 0.503846 0.0472 0.3086 0.0394 0.011085               5.50           49.5
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_180653
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_180653/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_180653/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 3/12: K2_R3_MC5-10_H4
+================================================================================
+K=2, R=3, mc_train=5, mc_eval=10, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K2_R3_MC5-10_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9d990dcf40>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K2_R3_MC5-10_H4
+================================================================================
+✓ New best model (Val Loss: 3.885838)
+✓ New best model (Val Loss: 0.196930)
+Epoch 5/100 - Train: 27.816643, Val: 0.383752, RMSE: 0.011296, IC: 0.0493, Time: 6.34s
+Early stopping at epoch 7
+
+⏱️  Training completed in 45.45s
+   Average: 6.49s/epoch
+
+[K2_R3_MC5-10_H4] Test Results:
+  RMSE: 0.016280
+  MAE:  0.012563
+  IC (single-asset):  0.034627
+  RIC (single-asset): 0.024978
+  Dir Acc: 0.503846
+  Sharpe: -0.1451
+  Max DD: 0.3653
+  ⏱️  Avg time: 6.49s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K2_R3_MC5-10_H4_20251118_180743/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K2_R3_MC5-10_H4 0.016280 0.012563 0.034627 0.024978 0.503846 -0.1451 0.3653 -0.1023 0.011048               6.49           45.4
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_180743
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_180743/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_180743/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 4/12: K2_R3_MC5-15_H4
+================================================================================
+K=2, R=3, mc_train=5, mc_eval=15, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K2_R3_MC5-15_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9dad19ca40>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K2_R3_MC5-15_H4
+================================================================================
+✓ New best model (Val Loss: -0.856683)
+✓ New best model (Val Loss: -1.183888)
+✓ New best model (Val Loss: -1.333827)
+Epoch 5/100 - Train: 24.675136, Val: -1.202957, RMSE: 0.011198, IC: -0.0702, Time: 6.77s
+✓ New best model (Val Loss: -1.630727)
+Epoch 10/100 - Train: 15.153334, Val: -1.736459, RMSE: 0.011246, IC: -0.0430, Time: 6.82s
+✓ New best model (Val Loss: -1.736459)
+✓ New best model (Val Loss: -2.286915)
+✓ New best model (Val Loss: -2.616466)
+Epoch 15/100 - Train: 11.211738, Val: -2.750421, RMSE: 0.011254, IC: 0.0195, Time: 6.79s
+✓ New best model (Val Loss: -2.750421)
+✓ New best model (Val Loss: -2.928737)
+✓ New best model (Val Loss: -3.268483)
+Epoch 20/100 - Train: 7.380109, Val: -3.175084, RMSE: 0.011400, IC: -0.0673, Time: 6.35s
+✓ New best model (Val Loss: -3.274169)
+✓ New best model (Val Loss: -3.424581)
+✓ New best model (Val Loss: -3.524655)
+Epoch 25/100 - Train: 4.930506, Val: -3.494869, RMSE: 0.011427, IC: -0.1040, Time: 6.28s
+✓ New best model (Val Loss: -3.636424)
+✓ New best model (Val Loss: -3.684290)
+✓ New best model (Val Loss: -3.760368)
+✓ New best model (Val Loss: -3.806990)
+Epoch 30/100 - Train: 2.973018, Val: -3.795414, RMSE: 0.011563, IC: -0.0631, Time: 6.89s
+✓ New best model (Val Loss: -3.823759)
+✓ New best model (Val Loss: -3.914742)
+Epoch 35/100 - Train: 1.699515, Val: -3.866713, RMSE: 0.011501, IC: 0.0628, Time: 6.80s
+✓ New best model (Val Loss: -3.920931)
+Epoch 40/100 - Train: 0.495496, Val: -3.915277, RMSE: 0.011710, IC: 0.0369, Time: 6.53s
+✓ New best model (Val Loss: -3.973137)
+Epoch 45/100 - Train: -0.322117, Val: -3.871113, RMSE: 0.011940, IC: 0.0189, Time: 6.22s
+Early stopping at epoch 48
+
+⏱️  Training completed in 316.78s
+   Average: 6.60s/epoch
+
+[K2_R3_MC5-15_H4] Test Results:
+  RMSE: 0.016408
+  MAE:  0.012666
+  IC (single-asset):  0.012826
+  RIC (single-asset): 0.022396
+  Dir Acc: 0.507692
+  Sharpe: 0.6312
+  Max DD: 0.2226
+  ⏱️  Avg time: 6.60s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K2_R3_MC5-15_H4_20251118_180829/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE       IC      RIC  Dir Acc Sharpe Max DD Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K2_R3_MC5-15_H4 0.016408 0.012666 0.012826 0.022396 0.507692 0.6312 0.2226 0.7300 0.009607               6.60          316.8
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_180829
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_180829/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_180829/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 5/12: K3_R2_MC5-10_H4
+================================================================================
+K=3, R=2, mc_train=5, mc_eval=10, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K3_R2_MC5-10_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9dac880e00>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K3_R2_MC5-10_H4
+================================================================================
+✓ New best model (Val Loss: -3.703360)
+Epoch 5/100 - Train: 21.692801, Val: -3.853871, RMSE: 0.011570, IC: 0.0205, Time: 5.62s
+✓ New best model (Val Loss: -3.853871)
+✓ New best model (Val Loss: -3.896919)
+Epoch 10/100 - Train: 12.232150, Val: -3.374624, RMSE: 0.013485, IC: -0.0501, Time: 6.08s
+Early stopping at epoch 11
+
+⏱️  Training completed in 63.25s
+   Average: 5.75s/epoch
+
+[K3_R2_MC5-10_H4] Test Results:
+  RMSE: 0.016548
+  MAE:  0.012665
+  IC (single-asset):  -0.033320
+  RIC (single-asset): -0.024627
+  Dir Acc: 0.500000
+  Sharpe: -0.7504
+  Max DD: 0.5234
+  ⏱️  Avg time: 5.75s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K3_R2_MC5-10_H4_20251118_181347/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE        IC       RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K3_R2_MC5-10_H4 0.016548 0.012665 -0.033320 -0.024627 0.500000 -0.7504 0.5234 -0.3689 0.009773               5.75           63.2
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_181347
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_181347/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_181347/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 6/12: K3_R2_MC5-15_H4
+================================================================================
+K=3, R=2, mc_train=5, mc_eval=15, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K3_R2_MC5-15_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9caaed5f80>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K3_R2_MC5-15_H4
+================================================================================
+✓ New best model (Val Loss: -3.691075)
+Epoch 5/100 - Train: 26.033342, Val: -2.812886, RMSE: 0.015235, IC: -0.0112, Time: 6.07s
+Early stopping at epoch 6
+
+⏱️  Training completed in 34.95s
+   Average: 5.82s/epoch
+
+[K3_R2_MC5-15_H4] Test Results:
+  RMSE: 0.017691
+  MAE:  0.013816
+  IC (single-asset):  0.019231
+  RIC (single-asset): 0.045967
+  Dir Acc: 0.496154
+  Sharpe: -0.0472
+  Max DD: 0.3640
+  ⏱️  Avg time: 5.82s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K3_R2_MC5-15_H4_20251118_181451/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K3_R2_MC5-15_H4 0.017691 0.013816 0.019231 0.045967 0.496154 -0.0472 0.3640 -0.0334 0.010522               5.82           34.9
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_181451
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_181451/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_181451/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 7/12: K3_R3_MC5-10_H4
+================================================================================
+K=3, R=3, mc_train=5, mc_eval=10, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K3_R3_MC5-10_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9c94296980>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K3_R3_MC5-10_H4
+================================================================================
+✓ New best model (Val Loss: -2.208744)
+✓ New best model (Val Loss: -3.373231)
+✓ New best model (Val Loss: -3.865178)
+✓ New best model (Val Loss: -3.887336)
+Epoch 5/100 - Train: 22.832344, Val: -3.778168, RMSE: 0.012578, IC: 0.1083, Time: 6.50s
+Early stopping at epoch 9
+
+⏱️  Training completed in 61.79s
+   Average: 6.86s/epoch
+
+[K3_R3_MC5-10_H4] Test Results:
+  RMSE: 0.016299
+  MAE:  0.012653
+  IC (single-asset):  0.073504
+  RIC (single-asset): 0.103976
+  Dir Acc: 0.550000
+  Sharpe: 1.1227
+  Max DD: 0.3116
+  ⏱️  Avg time: 6.86s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K3_R3_MC5-10_H4_20251118_181527/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE       IC      RIC  Dir Acc Sharpe Max DD Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K3_R3_MC5-10_H4 0.016299 0.012653 0.073504 0.103976 0.550000 1.1227 0.3116 0.9259 0.009552               6.86           61.8
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_181527
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_181527/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_181527/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 8/12: K3_R3_MC5-15_H4
+================================================================================
+K=3, R=3, mc_train=5, mc_eval=15, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K3_R3_MC5-15_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9caaed5ee0>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K3_R3_MC5-15_H4
+================================================================================
+✓ New best model (Val Loss: -3.763736)
+Epoch 5/100 - Train: 29.455113, Val: -3.943907, RMSE: 0.011719, IC: -0.0308, Time: 7.21s
+✓ New best model (Val Loss: -3.943907)
+✓ New best model (Val Loss: -3.978053)
+Epoch 10/100 - Train: 17.753803, Val: -3.971418, RMSE: 0.011409, IC: 0.0196, Time: 7.15s
+Early stopping at epoch 12
+
+⏱️  Training completed in 83.18s
+   Average: 6.93s/epoch
+
+[K3_R3_MC5-15_H4] Test Results:
+  RMSE: 0.016533
+  MAE:  0.012792
+  IC (single-asset):  -0.076472
+  RIC (single-asset): -0.073742
+  Dir Acc: 0.480769
+  Sharpe: -0.7461
+  Max DD: 0.4539
+  ⏱️  Avg time: 6.93s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K3_R3_MC5-15_H4_20251118_181630/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE        IC       RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K3_R3_MC5-15_H4 0.016533 0.012792 -0.076472 -0.073742 0.480769 -0.7461 0.4539 -0.4231 0.009634               6.93           83.2
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_181630
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_181630/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_181630/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 9/12: K4_R2_MC5-10_H4
+================================================================================
+K=4, R=2, mc_train=5, mc_eval=10, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K4_R2_MC5-10_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9c94296020>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K4_R2_MC5-10_H4
+================================================================================
+✓ New best model (Val Loss: -3.816315)
+✓ New best model (Val Loss: -3.924294)
+Epoch 5/100 - Train: 25.229797, Val: -3.913907, RMSE: 0.012110, IC: -0.0049, Time: 5.83s
+✓ New best model (Val Loss: -3.969195)
+Epoch 10/100 - Train: 16.909097, Val: -3.789220, RMSE: 0.011334, IC: 0.0290, Time: 6.13s
+Early stopping at epoch 11
+
+⏱️  Training completed in 67.09s
+   Average: 6.10s/epoch
+
+[K4_R2_MC5-10_H4] Test Results:
+  RMSE: 0.016930
+  MAE:  0.013152
+  IC (single-asset):  0.052983
+  RIC (single-asset): 0.080350
+  Dir Acc: 0.496154
+  Sharpe: -0.0472
+  Max DD: 0.3640
+  ⏱️  Avg time: 6.10s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K4_R2_MC5-10_H4_20251118_181754/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE       IC      RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K4_R2_MC5-10_H4 0.016930 0.013152 0.052983 0.080350 0.496154 -0.0472 0.3640 -0.0334 0.010021               6.10           67.1
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_181754
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_181754/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_181754/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 10/12: K4_R2_MC5-15_H4
+================================================================================
+K=4, R=2, mc_train=5, mc_eval=15, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K4_R2_MC5-15_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9c945cfce0>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K4_R2_MC5-15_H4
+================================================================================
+✓ New best model (Val Loss: -1.230997)
+✓ New best model (Val Loss: -3.976216)
+Epoch 5/100 - Train: 21.146185, Val: -3.864252, RMSE: 0.011412, IC: -0.0362, Time: 6.08s
+Early stopping at epoch 7
+
+⏱️  Training completed in 43.12s
+   Average: 6.16s/epoch
+
+[K4_R2_MC5-15_H4] Test Results:
+  RMSE: 0.016287
+  MAE:  0.012634
+  IC (single-asset):  0.018584
+  RIC (single-asset): -0.011573
+  Dir Acc: 0.475000
+  Sharpe: -0.2897
+  Max DD: 0.3738
+  ⏱️  Avg time: 6.16s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K4_R2_MC5-15_H4_20251118_181902/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE       IC       RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K4_R2_MC5-15_H4 0.016287 0.012634 0.018584 -0.011573 0.475000 -0.2897 0.3738 -0.1996 0.009579               6.16           43.1
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_181902
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_181902/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_181902/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 11/12: K4_R3_MC5-10_H4
+================================================================================
+K=4, R=3, mc_train=5, mc_eval=10, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K4_R3_MC5-10_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9dad183ec0>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K4_R3_MC5-10_H4
+================================================================================
+✓ New best model (Val Loss: -3.755169)
+Epoch 5/100 - Train: 20.185703, Val: -3.562516, RMSE: 0.011706, IC: -0.0736, Time: 6.86s
+Early stopping at epoch 6
+
+⏱️  Training completed in 43.26s
+   Average: 7.21s/epoch
+
+[K4_R3_MC5-10_H4] Test Results:
+  RMSE: 0.016998
+  MAE:  0.013236
+  IC (single-asset):  -0.000102
+  RIC (single-asset): -0.014050
+  Dir Acc: 0.492308
+  Sharpe: -0.1457
+  Max DD: 0.3646
+  ⏱️  Avg time: 7.21s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K4_R3_MC5-10_H4_20251118_181946/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE        IC       RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K4_R3_MC5-10_H4 0.016998 0.013236 -0.000102 -0.014050 0.492308 -0.1457 0.3646 -0.1029 0.010268               7.21           43.3
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_181946
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_181946/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_181946/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+Config 12/12: K4_R3_MC5-15_H4
+================================================================================
+K=4, R=3, mc_train=5, mc_eval=15, heads=4
+================================================================================
+HPARAM_TUNING TRAINING - Unified Pipeline
+================================================================================
+Dataset: IXIC
+Models: K4_R3_MC5-15_H4
+Config: {'epochs': 100, 'lr': 0.01, 'loss_type': 'nll', 'patience': 5, 'optimizer_fn': <function tune_hyperparameters.<locals>.<lambda> at 0x7f9d990dcf40>, 'scheduler_fn': None}
+Device: cuda
+================================================================================
+
+================================================================================
+Training: K4_R3_MC5-15_H4
+================================================================================
+✓ New best model (Val Loss: -3.328409)
+✓ New best model (Val Loss: -3.933310)
+✓ New best model (Val Loss: -3.936665)
+Epoch 5/100 - Train: 23.002373, Val: -3.600518, RMSE: 0.011731, IC: -0.0119, Time: 7.26s
+Early stopping at epoch 8
+
+⏱️  Training completed in 58.07s
+   Average: 7.26s/epoch
+
+[K4_R3_MC5-15_H4] Test Results:
+  RMSE: 0.016545
+  MAE:  0.012758
+  IC (single-asset):  -0.037342
+  RIC (single-asset): -0.025307
+  Dir Acc: 0.492308
+  Sharpe: -0.6414
+  Max DD: 0.4766
+  ⏱️  Avg time: 7.26s/epoch
+
+  NOTE: IC/RIC are single-asset time-series correlations.
+        For cross-sectional IC, use calculate_cross_sectional_metrics()
+  💾 Predictions saved to: logs/hparam_tuning/IXIC_K4_R3_MC5-15_H4_20251118_182030/test_predictions.csv
+
+================================================================================
+TRAINING SUMMARY
+================================================================================
+          Model     RMSE      MAE        IC       RIC  Dir Acc  Sharpe Max DD  Calmar     CRPS Avg Time (s/epoch) Total Time (s)
+K4_R3_MC5-15_H4 0.016545 0.012758 -0.037342 -0.025307 0.492308 -0.6414 0.4766 -0.3465 0.009768               7.26           58.1
+
+================================================================================
+✓ Results saved to: logs/hparam_tuning/IXIC_summary_20251118_182030
+  - Comparison table: logs/hparam_tuning/IXIC_summary_20251118_182030/hparam_tuning_comparison.csv
+  - Summary report: logs/hparam_tuning/IXIC_summary_20251118_182030/hparam_tuning_summary.txt
+================================================================================
+
+📊 NOTE: IC/RIC shown are SINGLE-ASSET time-series correlations.
+   For CROSS-SECTIONAL IC across multiple assets, use:
+   >>> from utils.baseline_trainer import calculate_cross_sectional_metrics
+   >>> prediction_files = {
+   ...     'IXIC': 'logs/.../IXIC_IXIC_.../test_predictions.csv',
+   ...     'DJI': 'logs/.../IXIC_DJI_.../test_predictions.csv',
+   ...     'NYSE': 'logs/.../IXIC_NYSE_.../test_predictions.csv'
+   ... }
+   >>> results = calculate_cross_sectional_metrics(prediction_files)
+================================================================================
+
+================================================================================
+HYPERPARAMETER TUNING RESULTS
+================================================================================
+
+1. Best Configuration per Parameter Value:
+--------------------------------------------------------------------------------
+
+K (Chebyshev Order)
+  K=2: K2_R3_MC5-10_H4                IC=0.034627, RIC=0.024978, NLL=7.047503
+  K=3: K3_R3_MC5-10_H4                IC=0.073504, RIC=0.103976, NLL=-3.077084
+  K=4: K4_R2_MC5-10_H4                IC=0.052983, RIC=0.080350, NLL=-2.835489
+
+R (BIMamba Layers)
+  R=2: K4_R2_MC5-10_H4                IC=0.052983, RIC=0.080350, NLL=-2.835489
+  R=3: K3_R3_MC5-10_H4                IC=0.073504, RIC=0.103976, NLL=-3.077084
+
+mc_eval (MC Samples Evaluation)
+  mc_eval=10: K3_R3_MC5-10_H4                IC=0.073504, RIC=0.103976, NLL=-3.077084
+  mc_eval=15: K3_R2_MC5-15_H4                IC=0.019231, RIC=0.045967, NLL=-2.772538
+
+mc_train (MC Samples Training)
+  mc_train=5: K3_R3_MC5-10_H4                IC=0.073504, RIC=0.103976, NLL=-3.077084
+
+heads (Attention Heads)
+  heads=4: K3_R3_MC5-10_H4                IC=0.073504, RIC=0.103976, NLL=-3.077084
+
+================================================================================
+✓ BEST OVERALL CONFIGURATION: K3_R3_MC5-10_H4
+================================================================================
+  IC:    0.073504
+  RIC:   0.103976
+  RMSE:  0.016299
+  NLL:   -3.077084
+================================================================================
+
+2. Top 5 Configurations by IC:
+--------------------------------------------------------------------------------
+1. K3_R3_MC5-10_H4                IC=0.073504, RIC=0.103976, NLL=-3.077084
+2. K4_R2_MC5-10_H4                IC=0.052983, RIC=0.080350, NLL=-2.835489
+3. K2_R3_MC5-10_H4                IC=0.034627, RIC=0.024978, NLL=7.047503
+4. K3_R2_MC5-15_H4                IC=0.019231, RIC=0.045967, NLL=-2.772538
+5. K4_R2_MC5-15_H4                IC=0.018584, RIC=-0.011573, NLL=-3.022984
+
+================================================================================
+Results saved to: logs/hparam_tuning/
+================================================================================
+
+================================================================================
+✓ Hyperparameter Tuning Completed!
+================================================================================
+
+Key Findings:
+  - Tested top 5 critical parameters from TUNE_PARAMS.md
+  - Optimized for GaussianNLL loss (Bayesian uncertainty)
+  - Results saved to: logs/hparam_tuning/
+
+Next Steps:
+  1. Review best configurations from analysis above
+  2. Apply best configs to other datasets (DJI, NYSE)
+  3. Calculate cross-sectional IC for validation
+  4. For Non-Bayesian comparison, use models/mamba_gnn_study.py

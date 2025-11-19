@@ -1,0 +1,195 @@
+{
+  "uncertainty_weighted_ic": {
+    "nb": 0.9889321270036431,
+    "b": 0.9736841766392079
+  },
+  "risk_adjusted_returns": {
+    "nb": {
+      "total_return_base": 0.057631740573279945,
+      "total_return_adjusted": 0.057631740573279945,
+      "sharpe_base": 9.195458601965349,
+      "sharpe_adjusted": 9.195458601965349,
+      "improvement": 0.0,
+      "avg_position_size": 1.0
+    },
+    "b": {
+      "total_return_base": 0.07122644415280094,
+      "total_return_adjusted": 0.07121307776139207,
+      "sharpe_base": 8.942970631425545,
+      "sharpe_adjusted": 8.942845681555472,
+      "improvement": -0.001397185287570206,
+      "avg_position_size": 0.999808550287204
+    }
+  },
+  "sharpness": {
+    "nb": 0.22313017000000004,
+    "b": 0.004997393229807692
+  },
+  "prediction_intervals": {
+    "nb": {
+      "mean_width_95": 0.8746702663999997,
+      "mean_width_68": 0.4462603400000001,
+      "median_width_95": 0.8746702663999999,
+      "median_width_68": 0.44626034,
+      "coverage_95": 1.0,
+      "coverage_68": 1.0,
+      "width_std_95": 2.220446049250313e-16,
+      "width_std_68": 1.1128886299618004e-16
+    },
+    "b": {
+      "mean_width_95": 0.019589781460846153,
+      "mean_width_68": 0.009994786459615384,
+      "median_width_95": 0.019635068124,
+      "median_width_68": 0.010017891899999999,
+      "coverage_95": 0.9807692307692307,
+      "coverage_68": 0.7288461538461538,
+      "width_std_95": 0.00031114070552971436,
+      "width_std_68": 0.0001587452579233237
+    }
+  },
+  "confidence_accuracy": {
+    "nb": {
+      "bins": [
+        {
+          "bin": 10,
+          "confidence_min": 4.481668787018864,
+          "confidence_max": 4.481668787018864,
+          "mean_confidence": 4.481668787018863,
+          "mean_sigma": 0.22313017000000004,
+          "mean_error": 0.0012832359098500002,
+          "std_error": 0.0010269453776920667,
+          "sample_count": 520
+        }
+      ],
+      "correlation_confidence_vs_error": NaN,
+      "correlation_p_value": NaN,
+      "expected_trend": "negative (higher confidence -> lower error)"
+    },
+    "b": {
+      "bins": [
+        {
+          "bin": 1,
+          "confidence_min": 192.2474301324777,
+          "confidence_max": 196.4501173596984,
+          "mean_confidence": 194.92862404188247,
+          "mean_sigma": 0.005129264201923078,
+          "mean_error": 0.0035836954094230766,
+          "std_error": 0.001950678939064678,
+          "sample_count": 52
+        },
+        {
+          "bin": 2,
+          "confidence_min": 196.4501173596984,
+          "confidence_max": 197.22979722572177,
+          "mean_confidence": 196.88169942317458,
+          "mean_sigma": 0.005078198463461539,
+          "mean_error": 0.002449350604519231,
+          "std_error": 0.002234894603467105,
+          "sample_count": 52
+        },
+        {
+          "bin": 3,
+          "confidence_min": 197.22979722572177,
+          "confidence_max": 198.20072589394735,
+          "mean_confidence": 197.7300195238832,
+          "mean_sigma": 0.00505641175,
+          "mean_error": 0.0027580957063846165,
+          "std_error": 0.0020127966234660473,
+          "sample_count": 52
+        },
+        {
+          "bin": 4,
+          "confidence_min": 198.20072589394735,
+          "confidence_max": 198.9664805582425,
+          "mean_confidence": 198.59197297774438,
+          "mean_sigma": 0.005034457432692308,
+          "mean_error": 0.0030354254891153854,
+          "std_error": 0.002148678010822167,
+          "sample_count": 52
+        },
+        {
+          "bin": 5,
+          "confidence_min": 198.9664805582425,
+          "confidence_max": 199.60295182609426,
+          "mean_confidence": 199.2512601056005,
+          "mean_sigma": 0.00501779331153846,
+          "mean_error": 0.0032390071067307695,
+          "std_error": 0.002130748494725451,
+          "sample_count": 52
+        },
+        {
+          "bin": 6,
+          "confidence_min": 199.60295182609426,
+          "confidence_max": 200.80036829189612,
+          "mean_confidence": 200.13390007121825,
+          "mean_sigma": 0.0049956716538461544,
+          "mean_error": 0.004257746118653845,
+          "std_error": 0.0025877828264548575,
+          "sample_count": 52
+        },
+        {
+          "bin": 7,
+          "confidence_min": 200.80036829189612,
+          "confidence_max": 202.23182646299512,
+          "mean_confidence": 201.52226994284652,
+          "mean_sigma": 0.004961258142307691,
+          "mean_error": 0.004167980014038462,
+          "std_error": 0.0029080134460547167,
+          "sample_count": 52
+        },
+        {
+          "bin": 8,
+          "confidence_min": 202.23182646299512,
+          "confidence_max": 203.20874823807458,
+          "mean_confidence": 202.75987998966642,
+          "mean_sigma": 0.004930951384615384,
+          "mean_error": 0.0026995973844230778,
+          "std_error": 0.002142665096602515,
+          "sample_count": 52
+        },
+        {
+          "bin": 9,
+          "confidence_min": 203.20874823807458,
+          "confidence_max": 204.59769758712153,
+          "mean_confidence": 203.8320186398748,
+          "mean_sigma": 0.004905016865384615,
+          "mean_error": 0.004177665083153847,
+          "std_error": 0.003231563730671929,
+          "sample_count": 52
+        },
+        {
+          "bin": 10,
+          "confidence_min": 204.59769758712153,
+          "confidence_max": 208.07408602677435,
+          "mean_confidence": 205.5164860248397,
+          "mean_sigma": 0.004864909092307692,
+          "mean_error": 0.004341742974038462,
+          "std_error": 0.002801187900295249,
+          "sample_count": 52
+        }
+      ],
+      "correlation_confidence_vs_error": 0.11806838693222554,
+      "correlation_p_value": 0.007031946616575848,
+      "expected_trend": "negative (higher confidence -> lower error)"
+    }
+  },
+  "uncertainty_contribution": {
+    "high_uncertainty": {
+      "bayesian_error": 0.0030904434565,
+      "nonbayesian_error": 0.001414835696769231,
+      "sample_count": 130,
+      "mean_sigma": 0.005095510886923078
+    },
+    "low_uncertainty": {
+      "bayesian_error": 0.004051421353030769,
+      "nonbayesian_error": 0.0012263103579999999,
+      "sample_count": 130,
+      "mean_sigma": 0.0048930451892307695
+    },
+    "uncertainty_identifies_difficulty": {
+      "correlation": 0.07998940198606935,
+      "p_value": 0.0683684350098513,
+      "interpretation": "Positive correlation means Bayesian uncertainty identifies samples where Non-Bayesian struggles"
+    }
+  }
+}
