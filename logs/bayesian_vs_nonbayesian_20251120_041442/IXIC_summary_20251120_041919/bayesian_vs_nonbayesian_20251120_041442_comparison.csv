@@ -1,0 +1,2 @@
+Model,RMSE,MAE,IC,RIC,Dir Acc,Sharpe,Max DD,Calmar,CRPS,Avg Time (s/epoch),Total Time (s)
+BIMamba-MAGAC_Bayesian,0.003578,0.003013,0.989083,0.987820,0.905769,16.6544,0.0075,374.5342,0.002204,15.51,387.9

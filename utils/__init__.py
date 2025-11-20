@@ -7,6 +7,5 @@ Utilities for MAMBA_BGNN project including:
 """
 
 from .data_processing import data_processing, MinMax01, make_loader
-from ..old_code.trainer import Trainer
 
 __all__ = ['data_processing', 'MinMax01', 'make_loader', 'Trainer']

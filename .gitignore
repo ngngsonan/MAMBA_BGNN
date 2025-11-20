@@ -1,6 +1,8 @@
 # Python
 __pycache__/
 old_code/
+code_new/
+code_old/
 *.py[cod]
 *$py.class
 *.so

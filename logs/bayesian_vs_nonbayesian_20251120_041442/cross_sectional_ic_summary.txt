@@ -1,0 +1,54 @@
+================================================================================
+CROSS-SECTIONAL IC COMPARISON - BAYESIAN VS NON-BAYESIAN
+================================================================================
+Generated: 2025-11-20 04:42:24
+Datasets: IXIC, DJI, NYSE
+================================================================================
+
+
+======================================================================
+BIMamba-MAGAC_NonBayesian
+======================================================================
+Datasets used: IXIC, DJI, NYSE
+
+Cross-Sectional IC:
+  Mean:       0.470991
+  Std:        0.660168
+  Median:     0.826465
+  % Positive: 77.1%
+
+Cross-Sectional RIC:
+  Mean:       0.396154
+  Std:        0.647320
+  Median:     0.500000
+  % Positive: 75.4%
+
+======================================================================
+BIMamba-MAGAC_Bayesian
+======================================================================
+Datasets used: IXIC, DJI, NYSE
+
+Cross-Sectional IC:
+  Mean:       0.744526
+  Std:        0.426582
+  Median:     0.924952
+  % Positive: 92.5%
+
+Cross-Sectional RIC:
+  Mean:       0.654808
+  Std:        0.454228
+  Median:     0.500000
+  % Positive: 91.3%
+
+================================================================================
+COMPARISON SUMMARY
+================================================================================
+Cross-Sectional IC:
+  Non-Bayesian: 0.470991
+  Bayesian:     0.744526
+  Improvement:  +58.08%
+
+Cross-Sectional RIC:
+  Non-Bayesian: 0.396154
+  Bayesian:     0.654808
+  Improvement:  +65.29%
